@@ -47,7 +47,7 @@
 
     <div class="formframe">
         <label for="inputData">Input Data:</label>
-        <button type="button" id="copyBtn" onclick="copyToClipboard()">Copy to Clipboard</button><br><br>
+        <button type="button" id="copyBtn" onclick="copyToClipboard('inputData')">Copy to Clipboard</button><br><br>
         <textarea id="inputData" name="inputData" rows="10" cols="50"></textarea>
     </div>
 
@@ -66,12 +66,18 @@
         </form>
     </div>
 
+    <div class="formframe">
+        <label for="outputData">Output Data:</label>
+        <button type="button" id="copyOutputBtn" onclick="copyToClipboard('outputData')">Copy to Clipboard</button><br><br>
+        <textarea id="outputData" name="outputData" rows="10" cols="50"></textarea>
+    </div>
+
     <script>
-        function copyToClipboard() {
-            const inputData = document.getElementById('inputData');
-            inputData.select();
-            inputData.setSelectionRange(0, 99999); // For mobile devices
-            navigator.clipboard.writeText(inputData.value)
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            element.select();
+            element.setSelectionRange(0, 99999); // For mobile devices
+            navigator.clipboard.writeText(element.value)
                 .catch(err => {
                     console.error('Failed to copy: ', err);
                 });
