@@ -96,17 +96,17 @@
 
             // Generate pull requests
             const pullRequests = [];
-            const minutesBetweenPRs = 60 / prsPerHour;
+            const secondsBetweenPRs = 3600 / prsPerHour;
             let cumulativeTime = 0;
 
             for (let i = 0; i < numPRs; i++) {
                 // Add variance to the time between PRs using exponential distribution
                 // This creates realistic bursts while maintaining the expected rate
                 const randomFactor = -Math.log(1 - Math.random());
-                const timeSinceLastPR = minutesBetweenPRs * randomFactor;
+                const timeSinceLastPR = secondsBetweenPRs * randomFactor;
                 cumulativeTime += timeSinceLastPR;
 
-                // Calculate queue time with variance
+                // Calculate queue time with variance (in seconds)
                 const queuetime = Math.round(cumulativeTime);
 
                 // Determine if fast build passes (based on success rate)
@@ -115,11 +115,11 @@
                 // Determine if full build passes (based on success rate)
                 const FullBuildPasses = FastBuildPasses && (Math.random() * 100 < buildSuccessRateFull);
 
-                // Generate fast build time with variance
+                // Generate fast build time with variance (in seconds)
                 const fastVariance = (Math.random() - 0.5) * 2 * buildSpeedVarianceFast;
                 const FastBuildTime = Math.max(1, Math.round(buildSpeedFast + fastVariance));
 
-                // Generate full build time with variance
+                // Generate full build time with variance (in seconds)
                 const fullVariance = (Math.random() - 0.5) * 2 * buildSpeedVarianceFull;
                 const FullBuildTime = Math.max(1, Math.round(buildSpeedFull + fullVariance));
 
