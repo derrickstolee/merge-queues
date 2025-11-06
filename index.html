@@ -241,15 +241,32 @@
             const Y_OFFSET = 50;
             const TIME_SCALE = 0.1; // pixels per second
             
-            // Calculate total rows needed
+            // Calculate total rows needed and maximum width
             let totalRows = 0;
+            let maxWidth = 0;
+            
             for (const batch of batches) {
                 totalRows += batch.pullRequests.length + 1; // PRs + batch separator row
+                
+                // Find the rightmost point (last PR's queue time + fast build + full build)
+                const lastPR = batch.pullRequests[batch.pullRequests.length - 1];
+                let maxFullBuildTime = 0;
+                for (const pr of batch.pullRequests) {
+                    if (pr.FullBuildTime > maxFullBuildTime) {
+                        maxFullBuildTime = pr.FullBuildTime;
+                    }
+                }
+                const batchEndX = X_OFFSET + (lastPR.queuetime + lastPR.FastBuildTime + maxFullBuildTime) * TIME_SCALE;
+                if (batchEndX > maxWidth) {
+                    maxWidth = batchEndX;
+                }
             }
             
-            // Set canvas height before drawing
+            // Set canvas dimensions before drawing
             const requiredHeight = Y_OFFSET + (totalRows + 1) * ROW_HEIGHT;
+            const requiredWidth = maxWidth + X_OFFSET;
             canvas.height = Math.max(1000, requiredHeight);
+            canvas.width = Math.max(2000, requiredWidth);
             
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
