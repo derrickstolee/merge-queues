@@ -140,6 +140,14 @@
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('generateBtn').addEventListener('click', generatePullRequests);
             document.getElementById('simulateBtn').addEventListener('click', simulateQueue);
+            
+            // Prevent form submissions to keep inputs editable
+            document.querySelectorAll('form').forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    return false;
+                });
+            });
         });
 
         function simulateQueue() {
