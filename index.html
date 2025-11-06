@@ -7,397 +7,437 @@
 
 <head>
 	<link rel="stylesheet" href="style.css" />
-<!--
+	<!--
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.15.1/dist/phaser-arcade-physics.min.js"></script>
     <script src="game.js" ></script>
 -->
 </head>
 
 <body style="background-color:#FFF">
-    <div class="formframe">
-        <form>
-            <h2>Generate Input</h2>
-            <label for="numPRs">Number of PRs:</label>
-            <input type="number" id="numPRs" name="numPRs" value="500" /><br/><br/>
-
-            <label for="prsPerHour">PRs per Hour:</label>
-            <input type="number" id="prsPerHour" name="prsPerHour" value="10"/><br/><br/>
-
-            <label for="buildSpeedFast">Build Speed (Fast):</label>
-            <input type="number" id="buildSpeedFast" name="buildSpeedFast" value="60" /></input><br/><br/>
-
-            <label for="buildSuccessRateFast">Build Success Rate (Fast):</label>
-            <input type="number" id="buildSuccessRateFast" name="buildSuccessRateFast" min="0" max="100" step="0.1" value="99" />%<br/><br/>
-
-            <label for="buildSpeedVarianceFast">Build Speed Variance (Fast):</label>
-            <input type="number" id="buildSpeedVarianceFast" name="buildSpeedVarianceFast" value="15" /><br/><br/>
-
-            <label for="buildSpeedFull">Build Speed (Full):</label>
-            <input type="number" id="buildSpeedFull" name="buildSpeedFull" value="900" /><br/><br/>
-
-            <label for="buildSuccessRateFull">Build Success Rate (Full):</label>
-            <input type="number" id="buildSuccessRateFull" name="buildSuccessRateFull" min="0" max="100" step="0.1" value="95" />%<br/><br/>
-
-            <label for="buildSpeedVarianceFull">Build Speed Variance (Full):</label>
-            <input type="number" id="buildSpeedVarianceFull" name="buildSpeedVarianceFull" value="100" /><br/><br/>
-
-            <button type="button" id="generateBtn">Generate</button>
-        </form>
-    </div>
-
-    <div class="formframe">
-        <label for="inputData">Input Data:</label>
-        <button type="button" id="copyBtn" onclick="copyToClipboard('inputData')">Copy to Clipboard</button><br/><br/>
-        <textarea id="inputData" name="inputData" rows="10" cols="50"></textarea>
-    </div>
-
-    <div class="formframe">
-        <form>
-            <h2>Merge Queue Settings</h2>
-            <label for="strategy">Strategy:</label>
-            <select id="strategy" name="strategy">
-                <option value="simple">Simple</option>
-            </select><br/><br/>
-
-            <label for="maxBatchSize">Maximum batch size:</label>
-            <input type="number" id="maxBatchSize" name="maxBatchSize" value="5"><br/><br/>
-
-            <button type="button" id="simulateBtn">Simulate queue</button>
-        </form>
-    </div>
-
-    <div class="formframe">
-        <label for="outputData">Output Data:</label>
-        <button type="button" id="copyOutputBtn" onclick="copyToClipboard('outputData')">Copy to Clipboard</button><br/><br/>
-        <textarea id="outputData" name="outputData" rows="10" cols="50"></textarea>
-    </div>
-
-    <div class="formframe">
-        <h2>Queue Visualization</h2>
-        <div style="overflow: auto; max-height: 600px; max-width: 100%; border: 1px solid #ccc;">
-            <canvas id="queueCanvas" width="2000" height="1000"></canvas>
-        </div>
-    </div>
-
-    <script>
-        function copyToClipboard(elementId) {
-            const element = document.getElementById(elementId);
-            element.select();
-            element.setSelectionRange(0, 99999); // For mobile devices
-            navigator.clipboard.writeText(element.value)
-                .catch(err => {
-                    console.error('Failed to copy: ', err);
-                });
-        }
-
-        function generatePullRequests() {
-            // Get form values
-            const numPRs = parseInt(document.getElementById('numPRs').value) || 0;
-            const prsPerHour = parseInt(document.getElementById('prsPerHour').value) || 1;
-            const buildSpeedFast = parseInt(document.getElementById('buildSpeedFast').value) || 0;
-            const buildSuccessRateFast = parseFloat(document.getElementById('buildSuccessRateFast').value) || 0;
-            const buildSpeedVarianceFast = parseInt(document.getElementById('buildSpeedVarianceFast').value) || 0;
-            const buildSpeedFull = parseInt(document.getElementById('buildSpeedFull').value) || 0;
-            const buildSuccessRateFull = parseFloat(document.getElementById('buildSuccessRateFull').value) || 0;
-            const buildSpeedVarianceFull = parseInt(document.getElementById('buildSpeedVarianceFull').value) || 0;
-
-            // Generate pull requests
-            const pullRequests = [];
-            const secondsBetweenPRs = 3600 / prsPerHour;
-            let cumulativeTime = 0;
-
-            for (let i = 0; i < numPRs; i++) {
-                // Add variance to the time between PRs using exponential distribution
-                // This creates realistic bursts while maintaining the expected rate
-                const randomFactor = -Math.log(1 - Math.random());
-                const timeSinceLastPR = secondsBetweenPRs * randomFactor;
-                cumulativeTime += timeSinceLastPR;
-
-                // Calculate queue time with variance (in seconds)
-                const queuetime = Math.round(cumulativeTime);
-
-                // Determine if fast build passes (based on success rate)
-                const FastBuildPasses = Math.random() * 100 < buildSuccessRateFast;
-
-                // Determine if full build passes (based on success rate)
-                const FullBuildPasses = FastBuildPasses && (Math.random() * 100 < buildSuccessRateFull);
-
-                // Generate fast build time with variance (in seconds)
-                const fastVariance = (Math.random() - 0.5) * 2 * buildSpeedVarianceFast;
-                const FastBuildTime = Math.max(1, Math.round(buildSpeedFast + fastVariance));
-
-                // Generate full build time with variance (in seconds)
-                const fullVariance = (Math.random() - 0.5) * 2 * buildSpeedVarianceFull;
-                const FullBuildTime = Math.max(1, Math.round(buildSpeedFull + fullVariance));
-
-                pullRequests.push({
-                    queuetime: queuetime,
-                    FastBuildPasses: FastBuildPasses,
-                    FullBuildPasses: FullBuildPasses,
-                    FastBuildTime: FastBuildTime,
-                    FullBuildTime: FullBuildTime
-                });
-            }
-
-            // Populate the input data textarea with JSON
-            document.getElementById('inputData').value = JSON.stringify(pullRequests, null, 2);
-        }
-
-        // Add event listener to generate button
-        document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('generateBtn').addEventListener('click', generatePullRequests);
-            document.getElementById('simulateBtn').addEventListener('click', simulateAndRender);
-
-            // Prevent form submissions to keep inputs editable
-            document.querySelectorAll('form').forEach(form => {
-                form.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    return false;
-                });
-            });
-        });
-
-        function simulateAndRender() {
-            const batches = simulateQueue();
-            if (batches) {
-                renderQueue(batches);
-            }
-        }
-
-        function simulateQueue() {
-            try {
-                // Get settings
-                const maxBatchSize = parseInt(document.getElementById('maxBatchSize').value) || 1;
-                const strategy = document.getElementById('strategy').value;
-
-                // Parse input data
-                const inputData = document.getElementById('inputData').value;
-                const pullRequests = JSON.parse(inputData);
-
-                if (!Array.isArray(pullRequests) || pullRequests.length === 0) {
-                    alert('Invalid or empty input data. Please generate pull requests first.');
-                    return;
-                }
-
-                // Create batches
-                const batches = [];
-                let currentBatch = null;
-                let currentBatchEndTime = 0;
-
-                for (let i = 0; i < pullRequests.length; i++) {
-                    const pr = pullRequests[i];
-
-                    // Check if we need to start a new batch
-                    const needNewBatch = !currentBatch ||
-                                        currentBatch.pullRequests.length >= maxBatchSize ||
-                                        currentBatchEndTime < pr.queuetime;
-
-                    if (needNewBatch) {
-                        // Save the previous batch if it exists
-                        if (currentBatch) {
-                            batches.push(currentBatch);
-                        }
-
-                        // Start a new batch
-                        currentBatch = {
-                            pullRequests: [],
-			    FastBuildPasses: true,
-			    FullBuildPasses: true
-                        };
-                        currentBatchEndTime = 0;
-                    }
-
-                    // Add PR to current batch
-                    currentBatch.pullRequests.push(pr);
-		    currentBatch.FastBuildPasses = currentBatch.FastBuildPasses && pr.FastBuildPasses;
-		    currentBatch.FullBuildPasses = currentBatch.FullBuildPasses && pr.FullBuildPasses;
-
-                    // Update the batch end time (when this PR's fast build would complete)
-                    currentBatchEndTime = pr.queuetime + pr.FastBuildTime;
-                }
-
-                // Don't forget to add the last batch
-                if (currentBatch && currentBatch.pullRequests.length > 0) {
-                    batches.push(currentBatch);
-                }
-
-                // Populate the output data textarea with JSON
-                document.getElementById('outputData').value = JSON.stringify(batches, null, 2);
-
-                return batches;
-
-            } catch (error) {
-                alert('Error simulating queue: ' + error.message);
-                console.error('Simulation error:', error);
-                return null;
-            }
-        }
-
-        function renderQueue(batches) {
-            const canvas = document.getElementById('queueCanvas');
-            const ctx = canvas.getContext('2d');
-
-            // Constants for rendering
-            const ROW_HEIGHT = 30;
-            const PR_RADIUS = 8;
-            const DIAMOND_SIZE = 10;
-            const X_OFFSET = 50;
-            const Y_OFFSET = 50;
-            const MAX_CANVAS_WIDTH = 5000; // Maximum canvas width to avoid browser issues
-
-            // Phase 1: Augment objects with (time, row) coordinates
-            let currentRow = 0;
-            let maxTime = 0;
-            let maxRow = 0;
-
-            // Track all occupied time ranges by row for overlap detection
-	    let curVerticalStart = 0;
-	    let curVerticalEnd = 0;
-
-            for (const batch of batches) {
-                // Find max full build time for this batch
-                let maxFullBuildTime = 0;
-		let minQueueTime = batch.pullRequests[0].queuetime;
-
-                for (const pr of batch.pullRequests) {
-                    if (pr.FullBuildTime > maxFullBuildTime) {
-                        maxFullBuildTime = pr.FullBuildTime;
-                    }
-                }
-
-                // Store batch-level info
-                batch.maxFullBuildTime = maxFullBuildTime;
-                batch.pullRequests_augmented = [];
-
-                // Calculate the time range this batch will occupy
-                const batchStartTime = batch.pullRequests[0].queuetime;
-                const lastPR = batch.pullRequests[batch.pullRequests.length - 1];
-                const batchEndTime = lastPR.queuetime + lastPR.FastBuildTime + maxFullBuildTime;
-
-                // Check if we can fit starting from row 0
-		if (currentRow > 0 && minQueueTime > curVerticalStart + (curVerticalEnd - curVerticalStart) / 2) {
-			currentRow = 0;
-			curVerticalStart = minQueueTime;
-			curVerticalEnd = minQueueTime;
-                }
-
-                // Augment each PR with position
-                let prRow = currentRow;
-                for (const pr of batch.pullRequests) {
-                    pr.time = pr.queuetime;
-                    pr.row = prRow;
-                    pr.endTime = pr.queuetime + 2 * pr.FullBuildTime;
-
-                    if (pr.endTime > maxTime) {
-                        maxTime = pr.endTime;
-                    }
-
-                    prRow++;
-                }
-
-                // Augment batch separator with position
-                batch.time = lastPR.queuetime + lastPR.FastBuildTime;
-                batch.row = prRow;
-                batch.endTime = batch.time + 2 * maxFullBuildTime;
-
-                if (batch.endTime > maxTime) {
-                    maxTime = batch.endTime;
-                }
-
-		curVerticalEnd = batch.endTime;
-
-                // Update currentRow to be ready for next batch if it needs to go beyond existing rows
-                currentRow = Math.max(currentRow, prRow + 1);
-                maxRow = Math.max(maxRow, prRow + 1);
-            }
-
-            maxRow = currentRow;
-
-            // Phase 2: Calculate scaling based on coordinates
-            const availableWidth = MAX_CANVAS_WIDTH - (2 * X_OFFSET);
-            const TIME_SCALE = availableWidth / maxTime; // pixels per second
-            const requiredHeight = Y_OFFSET + (maxRow + 1) * ROW_HEIGHT;
-            const requiredWidth = Math.min(MAX_CANVAS_WIDTH, (maxTime * TIME_SCALE) + (2 * X_OFFSET));
-
-            // Set canvas dimensions before drawing
-            canvas.height = Math.max(1000, requiredHeight);
-            canvas.width = Math.max(2000, requiredWidth);
-
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Phase 3: Render using the augmented coordinates
-            let prevX = null;
-            let prevY = null;
-
-            for (const batch of batches) {
-                // Render each PR in the batch
-                for (const pr of batch.pullRequests) {
-                    const y = Y_OFFSET + pr.row * ROW_HEIGHT;
-                    const x = X_OFFSET + pr.time * TIME_SCALE;
-
-                    // Draw connecting line from previous element
-                    if (prevX !== null && prevY !== null) {
-                        ctx.strokeStyle = 'black';
-                        ctx.lineWidth = 3;
-                        ctx.beginPath();
-                        ctx.moveTo(prevX, prevY);
-                        ctx.lineTo(x, y);
-                        ctx.stroke();
-                    }
-
-                    // Draw fast build rectangle (green or red)
-                    ctx.fillStyle = 'green';
-                    const fastBuildWidth = pr.FastBuildTime * TIME_SCALE;
-                    ctx.fillRect(x, y - PR_RADIUS, fastBuildWidth, PR_RADIUS * 2);
-
-                    // Draw PR circle (black)
-                    ctx.fillStyle = pr.FastBuildPasses ? 'black' : 'red';
-                    ctx.beginPath();
-                    ctx.arc(x, y, PR_RADIUS, 0.5 * Math.PI, 1.5 * Math.PI);
-                    ctx.fill();
-
-                    // Update previous position
-                    prevX = x;
-                    prevY = y;
-                }
-
-                // Draw batch separator (diamond and full build rectangle)
-                const diamondY = Y_OFFSET + batch.row * ROW_HEIGHT;
-                const diamondX = X_OFFSET + batch.time * TIME_SCALE;
-
-                // Draw connecting line from previous element
-                if (prevX !== null && prevY !== null) {
-                    ctx.strokeStyle = 'black';
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    ctx.moveTo(prevX, prevY);
-                    ctx.lineTo(diamondX, diamondY);
-                    ctx.stroke();
-                }
-
-                // Draw full build rectangle (red)
-                ctx.fillStyle = batch.FullBuildPasses ? 'green' : 'red';
-                const fullBuildWidth = batch.maxFullBuildTime * TIME_SCALE;
-                ctx.fillRect(diamondX, diamondY - DIAMOND_SIZE, fullBuildWidth, DIAMOND_SIZE * 2);
-
-                // Draw diamond
-                ctx.fillStyle = batch.FullBuildPasses ? 'blue' : 'red';
-                ctx.beginPath();
-                ctx.moveTo(diamondX, diamondY - DIAMOND_SIZE);
-                ctx.lineTo(diamondX + DIAMOND_SIZE, diamondY);
-                ctx.lineTo(diamondX, diamondY + DIAMOND_SIZE);
-                ctx.lineTo(diamondX - DIAMOND_SIZE, diamondY);
-                ctx.closePath();
-                ctx.fill();
-
-                // Update previous position
-                prevX = diamondX;
-                prevY = diamondY;
-
-            }
-        }
-    </script>
+	<table border="0">
+		<tr>
+			<td>
+				<div class="formframe">
+					<form>
+						<h2>Generate Input</h2>
+						<label for="numPRs">Number of PRs:</label>
+						<input type="number" id="numPRs" name="numPRs"
+							value="500" /><br /><br />
+
+						<label for="prsPerHour">PRs per Hour:</label>
+						<input type="number" id="prsPerHour" name="prsPerHour"
+							value="10" /><br /><br />
+
+						<label for="buildSpeedFast">Build Speed (Fast):</label>
+						<input type="number" id="buildSpeedFast" name="buildSpeedFast"
+							value="60" /></input><br /><br />
+
+						<label for="buildSuccessRateFast">Build Success Rate (Fast):</label>
+						<input type="number" id="buildSuccessRateFast"
+							name="buildSuccessRateFast" min="0" max="100" step="0.1"
+							value="99" />%<br /><br />
+
+						<label for="buildSpeedVarianceFast">Build Speed Variance (Fast):</label>
+						<input type="number" id="buildSpeedVarianceFast"
+							name="buildSpeedVarianceFast" value="15" /><br /><br />
+
+						<label for="buildSpeedFull">Build Speed (Full):</label>
+						<input type="number" id="buildSpeedFull" name="buildSpeedFull"
+							value="900" /><br /><br />
+
+						<label for="buildSuccessRateFull">Build Success Rate (Full):</label>
+						<input type="number" id="buildSuccessRateFull"
+							name="buildSuccessRateFull" min="0" max="100" step="0.1"
+							value="95" />%<br /><br />
+
+						<label for="buildSpeedVarianceFull">Build Speed Variance (Full):</label>
+						<input type="number" id="buildSpeedVarianceFull"
+							name="buildSpeedVarianceFull" value="100" /><br /><br />
+
+						<button type="button" id="generateBtn">Generate</button>
+					</form>
+				</div>
+			</td>
+			<td>
+				<div class="formframe">
+					<label for="inputData">Input Data:</label>
+					<button type="button" id="copyBtn" onclick="copyToClipboard('inputData')">Copy
+						to Clipboard</button><br /><br />
+					<textarea id="inputData" name="inputData" rows="10" cols="50"></textarea>
+				</div>
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<div class="formframe">
+					<form>
+						<h2>Merge Queue Settings</h2>
+						<label for="strategy">Strategy:</label>
+						<select id="strategy" name="strategy">
+							<option value="simple">Simple</option>
+						</select><br /><br />
+
+						<label for="maxBatchSize">Maximum batch size:</label>
+						<input type="number" id="maxBatchSize" name="maxBatchSize"
+							value="5"><br /><br />
+
+						<button type="button" id="simulateBtn">Simulate queue</button>
+					</form>
+				</div>
+			</td>
+			<td>
+				<div class="formframe">
+					<label for="outputData">Output Data:</label>
+					<button type="button" id="copyOutputBtn"
+						onclick="copyToClipboard('outputData')">Copy to
+						Clipboard</button><br /><br />
+					<textarea id="outputData" name="outputData" rows="10" cols="50"></textarea>
+				</div>
+			</td>
+		</tr>
+		<tr>
+			<td colspan="2">
+				<div class="formframe">
+					<h2>Queue Visualization</h2>
+					<div
+						style="overflow: auto; max-height: 600px; max-width: 100%; border: 1px solid #ccc;">
+						<canvas id="queueCanvas" width="2000" height="1000"></canvas>
+					</div>
+				</div>
+			</td>
+		</tr>
+	</table>
+
+	<script>
+		function copyToClipboard(elementId) {
+			const element = document.getElementById(elementId);
+			element.select();
+			element.setSelectionRange(0, 99999); // For mobile devices
+			navigator.clipboard.writeText(element.value)
+				.catch(err => {
+					console.error('Failed to copy: ', err);
+				});
+		}
+
+		function generatePullRequests() {
+			// Get form values
+			const numPRs = parseInt(document.getElementById('numPRs').value) || 0;
+			const prsPerHour = parseInt(document.getElementById('prsPerHour').value) || 1;
+			const buildSpeedFast = parseInt(document.getElementById('buildSpeedFast').value) || 0;
+			const buildSuccessRateFast = parseFloat(document.getElementById('buildSuccessRateFast').value) || 0;
+			const buildSpeedVarianceFast = parseInt(document.getElementById('buildSpeedVarianceFast').value) || 0;
+			const buildSpeedFull = parseInt(document.getElementById('buildSpeedFull').value) || 0;
+			const buildSuccessRateFull = parseFloat(document.getElementById('buildSuccessRateFull').value) || 0;
+			const buildSpeedVarianceFull = parseInt(document.getElementById('buildSpeedVarianceFull').value) || 0;
+
+			// Generate pull requests
+			const pullRequests = [];
+			const secondsBetweenPRs = 3600 / prsPerHour;
+			let cumulativeTime = 0;
+
+			for (let i = 0; i < numPRs; i++) {
+				// Add variance to the time between PRs using exponential distribution
+				// This creates realistic bursts while maintaining the expected rate
+				const randomFactor = -Math.log(1 - Math.random());
+				const timeSinceLastPR = secondsBetweenPRs * randomFactor;
+				cumulativeTime += timeSinceLastPR;
+
+				// Calculate queue time with variance (in seconds)
+				const queuetime = Math.round(cumulativeTime);
+
+				// Determine if fast build passes (based on success rate)
+				const FastBuildPasses = Math.random() * 100 < buildSuccessRateFast;
+
+				// Determine if full build passes (based on success rate)
+				const FullBuildPasses = FastBuildPasses && (Math.random() * 100 < buildSuccessRateFull);
+
+				// Generate fast build time with variance (in seconds)
+				const fastVariance = (Math.random() - 0.5) * 2 * buildSpeedVarianceFast;
+				const FastBuildTime = Math.max(1, Math.round(buildSpeedFast + fastVariance));
+
+				// Generate full build time with variance (in seconds)
+				const fullVariance = (Math.random() - 0.5) * 2 * buildSpeedVarianceFull;
+				const FullBuildTime = Math.max(1, Math.round(buildSpeedFull + fullVariance));
+
+				pullRequests.push({
+					queuetime: queuetime,
+					FastBuildPasses: FastBuildPasses,
+					FullBuildPasses: FullBuildPasses,
+					FastBuildTime: FastBuildTime,
+					FullBuildTime: FullBuildTime
+				});
+			}
+
+			// Populate the input data textarea with JSON
+			document.getElementById('inputData').value = JSON.stringify(pullRequests, null, 2);
+		}
+
+		// Add event listener to generate button
+		document.addEventListener('DOMContentLoaded', function () {
+			document.getElementById('generateBtn').addEventListener('click', generatePullRequests);
+			document.getElementById('simulateBtn').addEventListener('click', simulateAndRender);
+
+			// Prevent form submissions to keep inputs editable
+			document.querySelectorAll('form').forEach(form => {
+				form.addEventListener('submit', function (e) {
+					e.preventDefault();
+					return false;
+				});
+			});
+		});
+
+		function simulateAndRender() {
+			const batches = simulateQueue();
+			if (batches) {
+				renderQueue(batches);
+			}
+		}
+
+		function simulateQueue() {
+			try {
+				// Get settings
+				const maxBatchSize = parseInt(document.getElementById('maxBatchSize').value) || 1;
+				const strategy = document.getElementById('strategy').value;
+
+				// Parse input data
+				const inputData = document.getElementById('inputData').value;
+				const pullRequests = JSON.parse(inputData);
+
+				if (!Array.isArray(pullRequests) || pullRequests.length === 0) {
+					alert('Invalid or empty input data. Please generate pull requests first.');
+					return;
+				}
+
+				// Create batches
+				const batches = [];
+				let currentBatch = null;
+				let currentBatchEndTime = 0;
+
+				for (let i = 0; i < pullRequests.length; i++) {
+					const pr = pullRequests[i];
+
+					// Check if we need to start a new batch
+					const needNewBatch = !currentBatch ||
+						currentBatch.pullRequests.length >= maxBatchSize ||
+						currentBatchEndTime < pr.queuetime;
+
+					if (needNewBatch) {
+						// Save the previous batch if it exists
+						if (currentBatch) {
+							batches.push(currentBatch);
+						}
+
+						// Start a new batch
+						currentBatch = {
+							pullRequests: [],
+							FastBuildPasses: true,
+							FullBuildPasses: true
+						};
+						currentBatchEndTime = 0;
+					}
+
+					// Add PR to current batch
+					currentBatch.pullRequests.push(pr);
+					currentBatch.FastBuildPasses = currentBatch.FastBuildPasses && pr.FastBuildPasses;
+					currentBatch.FullBuildPasses = currentBatch.FullBuildPasses && pr.FullBuildPasses;
+
+					// Update the batch end time (when this PR's fast build would complete)
+					currentBatchEndTime = pr.queuetime + pr.FastBuildTime;
+				}
+
+				// Don't forget to add the last batch
+				if (currentBatch && currentBatch.pullRequests.length > 0) {
+					batches.push(currentBatch);
+				}
+
+				// Populate the output data textarea with JSON
+				document.getElementById('outputData').value = JSON.stringify(batches, null, 2);
+
+				return batches;
+
+			} catch (error) {
+				alert('Error simulating queue: ' + error.message);
+				console.error('Simulation error:', error);
+				return null;
+			}
+		}
+
+		function renderQueue(batches) {
+			const canvas = document.getElementById('queueCanvas');
+			const ctx = canvas.getContext('2d');
+
+			// Constants for rendering
+			const ROW_HEIGHT = 30;
+			const PR_RADIUS = 8;
+			const DIAMOND_SIZE = 10;
+			const X_OFFSET = 50;
+			const Y_OFFSET = 50;
+			const MAX_CANVAS_WIDTH = 5000; // Maximum canvas width to avoid browser issues
+
+			// Phase 1: Augment objects with (time, row) coordinates
+			let currentRow = 0;
+			let maxTime = 0;
+			let maxRow = 0;
+
+			// Track all occupied time ranges by row for overlap detection
+			let curVerticalStart = 0;
+			let curVerticalEnd = 0;
+
+			for (const batch of batches) {
+				// Find max full build time for this batch
+				let maxFullBuildTime = 0;
+				let minQueueTime = batch.pullRequests[0].queuetime;
+
+				for (const pr of batch.pullRequests) {
+					if (pr.FullBuildTime > maxFullBuildTime) {
+						maxFullBuildTime = pr.FullBuildTime;
+					}
+				}
+
+				// Store batch-level info
+				batch.maxFullBuildTime = maxFullBuildTime;
+				batch.pullRequests_augmented = [];
+
+				// Calculate the time range this batch will occupy
+				const batchStartTime = batch.pullRequests[0].queuetime;
+				const lastPR = batch.pullRequests[batch.pullRequests.length - 1];
+				const batchEndTime = lastPR.queuetime + lastPR.FastBuildTime + maxFullBuildTime;
+
+				// Check if we can fit starting from row 0
+				if (currentRow > 0 && minQueueTime > curVerticalStart + (curVerticalEnd - curVerticalStart) / 2) {
+					currentRow = 0;
+					curVerticalStart = minQueueTime;
+					curVerticalEnd = minQueueTime;
+				}
+
+				// Augment each PR with position
+				let prRow = currentRow;
+				for (const pr of batch.pullRequests) {
+					pr.time = pr.queuetime;
+					pr.row = prRow;
+					pr.endTime = pr.queuetime + 2 * pr.FullBuildTime;
+
+					if (pr.endTime > maxTime) {
+						maxTime = pr.endTime;
+					}
+
+					prRow++;
+				}
+
+				// Augment batch separator with position
+				batch.time = lastPR.queuetime + lastPR.FastBuildTime;
+				batch.row = prRow;
+				batch.endTime = batch.time + 2 * maxFullBuildTime;
+
+				if (batch.endTime > maxTime) {
+					maxTime = batch.endTime;
+				}
+
+				curVerticalEnd = batch.endTime;
+
+				// Update currentRow to be ready for next batch if it needs to go beyond existing rows
+				currentRow = Math.max(currentRow, prRow + 1);
+				maxRow = Math.max(maxRow, prRow + 1);
+			}
+
+			maxRow = currentRow;
+
+			// Phase 2: Calculate scaling based on coordinates
+			const availableWidth = MAX_CANVAS_WIDTH - (2 * X_OFFSET);
+			const TIME_SCALE = availableWidth / maxTime; // pixels per second
+			const requiredHeight = Y_OFFSET + (maxRow + 1) * ROW_HEIGHT;
+			const requiredWidth = Math.min(MAX_CANVAS_WIDTH, (maxTime * TIME_SCALE) + (2 * X_OFFSET));
+
+			// Set canvas dimensions before drawing
+			canvas.height = Math.max(1000, requiredHeight);
+			canvas.width = Math.max(2000, requiredWidth);
+
+			// Clear canvas
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+			// Phase 3: Render using the augmented coordinates
+			// Step 1: Draw all connecting lines first
+			let prevX = null;
+			let prevY = null;
+
+			ctx.strokeStyle = 'black';
+			ctx.lineWidth = 3;
+
+			for (const batch of batches) {
+				// Draw lines to each PR in the batch
+				for (const pr of batch.pullRequests) {
+					const y = Y_OFFSET + pr.row * ROW_HEIGHT;
+					const x = X_OFFSET + pr.time * TIME_SCALE;
+
+					// Draw connecting line from previous element
+					if (prevX !== null && prevY !== null) {
+						ctx.beginPath();
+						ctx.moveTo(prevX, prevY);
+						ctx.lineTo(x, y);
+						ctx.stroke();
+					}
+
+					// Update previous position
+					prevX = x;
+					prevY = y;
+				}
+
+				// Draw line to batch separator
+				const diamondY = Y_OFFSET + batch.row * ROW_HEIGHT;
+				const diamondX = X_OFFSET + batch.time * TIME_SCALE;
+
+				if (prevX !== null && prevY !== null) {
+					ctx.beginPath();
+					ctx.moveTo(prevX, prevY);
+					ctx.lineTo(diamondX, diamondY);
+					ctx.stroke();
+				}
+
+				// Update previous position
+				prevX = diamondX;
+				prevY = diamondY;
+			}
+
+			// Step 2: Draw all other elements (rectangles, circles, diamonds)
+			for (const batch of batches) {
+				// Render each PR in the batch
+				for (const pr of batch.pullRequests) {
+					const y = Y_OFFSET + pr.row * ROW_HEIGHT;
+					const x = X_OFFSET + pr.time * TIME_SCALE;
+
+					// Draw fast build rectangle (green or red)
+					ctx.fillStyle = 'green';
+					const fastBuildWidth = pr.FastBuildTime * TIME_SCALE;
+					ctx.fillRect(x, y - PR_RADIUS, fastBuildWidth, PR_RADIUS * 2);
+
+					// Draw PR circle (black)
+					ctx.fillStyle = pr.FastBuildPasses ? 'black' : 'red';
+					ctx.beginPath();
+					ctx.arc(x, y, PR_RADIUS, 0.5 * Math.PI, 1.5 * Math.PI);
+					ctx.fill();
+				}
+
+				// Draw batch separator (diamond and full build rectangle)
+				const diamondY = Y_OFFSET + batch.row * ROW_HEIGHT;
+				const diamondX = X_OFFSET + batch.time * TIME_SCALE;
+
+				// Draw full build rectangle (red)
+				ctx.fillStyle = batch.FullBuildPasses ? 'green' : 'red';
+				const fullBuildWidth = batch.maxFullBuildTime * TIME_SCALE;
+				ctx.fillRect(diamondX, diamondY - DIAMOND_SIZE, fullBuildWidth, DIAMOND_SIZE * 2);
+
+				// Draw diamond
+				ctx.fillStyle = batch.FullBuildPasses ? 'blue' : 'red';
+				ctx.beginPath();
+				ctx.moveTo(diamondX, diamondY - DIAMOND_SIZE);
+				ctx.lineTo(diamondX + DIAMOND_SIZE, diamondY);
+				ctx.lineTo(diamondX, diamondY + DIAMOND_SIZE);
+				ctx.lineTo(diamondX - DIAMOND_SIZE, diamondY);
+				ctx.closePath();
+				ctx.fill();
+			}
+		}
+	</script>
 </body>
 
 </html>
