@@ -10,9 +10,9 @@
 </head>
 
 <body style="background-color:#FFF">
-	<table border="0">
+	<table width="1200px" border="0">
 		<tr>
-			<td>
+			<td width="700px">
 				<div class="formframe">
 					<form>
 						<h2>Generate Input</h2>
@@ -54,7 +54,7 @@
 					</form>
 				</div>
 			</td>
-			<td>
+			<td width="500px">
 				<div class="formframe">
 					<label for="inputData">Input Data:</label>
 					<button type="button" id="copyBtn" onclick="copyToClipboard('inputData')">Copy
@@ -91,18 +91,15 @@
 				</div>
 			</td>
 		</tr>
-		<tr>
-			<td colspan="2">
-				<div class="formframe">
-					<h2>Queue Visualization</h2>
-					<div id="canvasContainer"
-						style="overflow: auto; max-height: 600px; max-width: 1200px; border: 1px solid #ccc; display: block;">
-						<canvas id="queueCanvas" width="2000" height="1000"></canvas>
-					</div>
-				</div>
-			</td>
-		</tr>
 	</table>
+
+	<div class="formframe">
+		<h2>Queue Visualization</h2>
+		<div id="canvasContainer"
+			style="overflow: auto; max-height: 600px; max-width: 1200px; border: 1px solid #ccc; display: block;">
+			<canvas id="queueCanvas" width="2000" height="1000"></canvas>
+		</div>
+	</div>
 
 	<script>
 		function copyToClipboard(elementId) {
@@ -403,7 +400,7 @@
 
 					// Draw fast build rectangle (green or red)
 					ctx.fillStyle = 'green';
-					const fastBuildWidth = pr.FastBuildTime * TIME_SCALE;
+					const fastBuildWidth = Math.min(1, pr.FastBuildTime * TIME_SCALE);
 					ctx.fillRect(x, y - PR_RADIUS, fastBuildWidth, PR_RADIUS * 2);
 
 					// Draw PR circle (black)
@@ -419,7 +416,7 @@
 
 				// Draw full build rectangle (red)
 				ctx.fillStyle = batch.FullBuildPasses ? 'green' : 'red';
-				const fullBuildWidth = batch.maxFullBuildTime * TIME_SCALE;
+				const fullBuildWidth = Math.min(1, batch.maxFullBuildTime * TIME_SCALE);
 				ctx.fillRect(diamondX, diamondY - DIAMOND_SIZE, fullBuildWidth, DIAMOND_SIZE * 2);
 
 				// Draw diamond
