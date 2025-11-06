@@ -24,22 +24,22 @@
             <input type="number" id="prsPerHour" name="prsPerHour" value="10"/><br/><br/>
 
             <label for="buildSpeedFast">Build Speed (Fast):</label>
-            <input type="number" id="buildSpeedFast" name="buildSpeedFast" value="10" /></input><br/><br/>
+            <input type="number" id="buildSpeedFast" name="buildSpeedFast" value="60" /></input><br/><br/>
 
             <label for="buildSuccessRateFast">Build Success Rate (Fast):</label>
             <input type="number" id="buildSuccessRateFast" name="buildSuccessRateFast" min="0" max="100" step="0.1" value="99" />%<br/><br/>
 
             <label for="buildSpeedVarianceFast">Build Speed Variance (Fast):</label>
-            <input type="number" id="buildSpeedVarianceFast" name="buildSpeedVarianceFast" value="5" /><br/><br/>
+            <input type="number" id="buildSpeedVarianceFast" name="buildSpeedVarianceFast" value="15" /><br/><br/>
 
             <label for="buildSpeedFull">Build Speed (Full):</label>
-            <input type="number" id="buildSpeedFull" name="buildSpeedFull" value="25" /><br/><br/>
+            <input type="number" id="buildSpeedFull" name="buildSpeedFull" value="900" /><br/><br/>
 
             <label for="buildSuccessRateFull">Build Success Rate (Full):</label>
             <input type="number" id="buildSuccessRateFull" name="buildSuccessRateFull" min="0" max="100" step="0.1" value="95" />%<br/><br/>
 
             <label for="buildSpeedVarianceFull">Build Speed Variance (Full):</label>
-            <input type="number" id="buildSpeedVarianceFull" name="buildSpeedVarianceFull" value="10" /><br/><br/>
+            <input type="number" id="buildSpeedVarianceFull" name="buildSpeedVarianceFull" value="100" /><br/><br/>
 
             <button type="button" id="generateBtn">Generate</button>
         </form>
@@ -70,6 +70,13 @@
         <label for="outputData">Output Data:</label>
         <button type="button" id="copyOutputBtn" onclick="copyToClipboard('outputData')">Copy to Clipboard</button><br/><br/>
         <textarea id="outputData" name="outputData" rows="10" cols="50"></textarea>
+    </div>
+
+    <div class="formframe">
+        <h2>Queue Visualization</h2>
+        <div style="overflow: auto; max-height: 600px; max-width: 100%; border: 1px solid #ccc;">
+            <canvas id="queueCanvas" width="2000" height="1000"></canvas>
+        </div>
     </div>
 
     <script>
@@ -139,7 +146,7 @@
         // Add event listener to generate button
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('generateBtn').addEventListener('click', generatePullRequests);
-            document.getElementById('simulateBtn').addEventListener('click', simulateQueue);
+            document.getElementById('simulateBtn').addEventListener('click', simulateAndRender);
             
             // Prevent form submissions to keep inputs editable
             document.querySelectorAll('form').forEach(form => {
@@ -149,6 +156,13 @@
                 });
             });
         });
+
+        function simulateAndRender() {
+            const batches = simulateQueue();
+            if (batches) {
+                renderQueue(batches);
+            }
+        }
 
         function simulateQueue() {
             try {
@@ -206,9 +220,96 @@
                 // Populate the output data textarea with JSON
                 document.getElementById('outputData').value = JSON.stringify(batches, null, 2);
 
+                return batches;
+
             } catch (error) {
                 alert('Error simulating queue: ' + error.message);
                 console.error('Simulation error:', error);
+                return null;
+            }
+        }
+
+        function renderQueue(batches) {
+            const canvas = document.getElementById('queueCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Constants for rendering
+            const ROW_HEIGHT = 30;
+            const PR_RADIUS = 8;
+            const DIAMOND_SIZE = 10;
+            const X_OFFSET = 50;
+            const Y_OFFSET = 50;
+            const TIME_SCALE = 0.1; // pixels per second
+            
+            // Calculate total rows needed
+            let totalRows = 0;
+            for (const batch of batches) {
+                totalRows += batch.pullRequests.length + 1; // PRs + batch separator row
+            }
+            
+            // Set canvas height before drawing
+            const requiredHeight = Y_OFFSET + (totalRows + 1) * ROW_HEIGHT;
+            canvas.height = Math.max(1000, requiredHeight);
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            let currentRow = 0;
+            
+            // Render each batch
+            for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+                const batch = batches[batchIndex];
+                const prs = batch.pullRequests;
+                
+                // Find max full build time for this batch
+                let maxFullBuildTime = 0;
+                for (const pr of prs) {
+                    if (pr.FullBuildTime > maxFullBuildTime) {
+                        maxFullBuildTime = pr.FullBuildTime;
+                    }
+                }
+                
+                // Render each PR in the batch
+                for (let prIndex = 0; prIndex < prs.length; prIndex++) {
+                    const pr = prs[prIndex];
+                    const y = Y_OFFSET + currentRow * ROW_HEIGHT;
+                    const x = X_OFFSET + pr.queuetime * TIME_SCALE;
+                    
+                    // Draw PR circle (black)
+                    ctx.fillStyle = 'black';
+                    ctx.beginPath();
+                    ctx.arc(x, y, PR_RADIUS, 0, 2 * Math.PI);
+                    ctx.fill();
+                    
+                    // Draw fast build rectangle (green)
+                    ctx.fillStyle = pr.FastBuildPasses ? 'green' : 'red';
+                    const fastBuildWidth = pr.FastBuildTime * TIME_SCALE;
+                    ctx.fillRect(x + PR_RADIUS, y - PR_RADIUS, fastBuildWidth, PR_RADIUS * 2);
+                    
+                    currentRow++;
+                }
+                
+                // Draw batch separator (diamond and full build rectangle)
+                const lastPR = prs[prs.length - 1];
+                const diamondY = Y_OFFSET + currentRow * ROW_HEIGHT;
+                const diamondX = X_OFFSET + (lastPR.queuetime + lastPR.FastBuildTime) * TIME_SCALE;
+                
+                // Draw diamond
+                ctx.fillStyle = 'blue';
+                ctx.beginPath();
+                ctx.moveTo(diamondX, diamondY - DIAMOND_SIZE);
+                ctx.lineTo(diamondX + DIAMOND_SIZE, diamondY);
+                ctx.lineTo(diamondX, diamondY + DIAMOND_SIZE);
+                ctx.lineTo(diamondX - DIAMOND_SIZE, diamondY);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Draw full build rectangle (red)
+                ctx.fillStyle = 'red';
+                const fullBuildWidth = maxFullBuildTime * TIME_SCALE;
+                ctx.fillRect(diamondX + DIAMOND_SIZE, diamondY - DIAMOND_SIZE, fullBuildWidth, DIAMOND_SIZE * 2);
+                
+                currentRow++;
             }
         }
     </script>
