@@ -18,7 +18,7 @@
         <form>
             <h2>Generate Input</h2>
             <label for="numPRs">Number of PRs:</label>
-            <input type="number" id="numPRs" name="numPRs" value="1000" /><br/><br/>
+            <input type="number" id="numPRs" name="numPRs" value="500" /><br/><br/>
 
             <label for="prsPerHour">PRs per Hour:</label>
             <input type="number" id="prsPerHour" name="prsPerHour" value="10"/><br/><br/>
@@ -60,7 +60,7 @@
             </select><br/><br/>
 
             <label for="maxBatchSize">Maximum batch size:</label>
-            <input type="number" id="maxBatchSize" name="maxBatchSize"><br/><br/>
+            <input type="number" id="maxBatchSize" name="maxBatchSize" value="5"><br/><br/>
 
             <button type="button" id="simulateBtn">Simulate queue</button>
         </form>
@@ -200,13 +200,17 @@
 
                         // Start a new batch
                         currentBatch = {
-                            pullRequests: []
+                            pullRequests: [],
+			    FastBuildPasses: true,
+			    FullBuildPasses: true
                         };
                         currentBatchEndTime = 0;
                     }
 
                     // Add PR to current batch
                     currentBatch.pullRequests.push(pr);
+		    currentBatch.FastBuildPasses = currentBatch.FastBuildPasses && pr.FastBuildPasses;
+		    currentBatch.FullBuildPasses = currentBatch.FullBuildPasses && pr.FullBuildPasses;
 
                     // Update the batch end time (when this PR's fast build would complete)
                     currentBatchEndTime = pr.queuetime + pr.FastBuildTime;
@@ -246,6 +250,9 @@
             let maxTime = 0;
             let maxRow = 0;
 
+            // Track all occupied time ranges by row for overlap detection
+            const rowOccupancy = []; // Array of arrays, each containing {start, end} time ranges
+
             for (const batch of batches) {
                 // Find max full build time for this batch
                 let maxFullBuildTime = 0;
@@ -254,37 +261,91 @@
                         maxFullBuildTime = pr.FullBuildTime;
                     }
                 }
-                
+
                 // Store batch-level info
                 batch.maxFullBuildTime = maxFullBuildTime;
                 batch.pullRequests_augmented = [];
 
+                // Calculate the time range this batch will occupy
+                const batchStartTime = batch.pullRequests[0].queuetime;
+                const lastPR = batch.pullRequests[batch.pullRequests.length - 1];
+                const batchEndTime = lastPR.queuetime + lastPR.FastBuildTime + maxFullBuildTime;
+
+                // Try to find the lowest row where this batch fits without overlapping
+                let targetRow = 0;
+                let foundRow = false;
+
+                // Check if we can fit starting from row 0
+                for (let testRow = 0; testRow < currentRow; testRow++) {
+                    const numRowsNeeded = batch.pullRequests.length + 1; // PRs + batch separator
+                    let canFit = true;
+
+                    // Check if all rows needed by this batch are free in the time range
+                    for (let r = testRow; r < testRow + numRowsNeeded && r < rowOccupancy.length; r++) {
+                        if (rowOccupancy[r]) {
+                            for (const occupied of rowOccupancy[r]) {
+                                // Check for overlap: batch overlaps if it starts before occupied ends and ends after occupied starts
+                                if (batchStartTime < occupied.end && batchEndTime > occupied.start) {
+                                    canFit = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!canFit) break;
+                    }
+
+                    if (canFit) {
+                        targetRow = testRow;
+                        foundRow = true;
+                        break;
+                    }
+                }
+
+                // If we couldn't find a lower row, use currentRow
+                if (!foundRow) {
+                    targetRow = currentRow;
+                }
+
                 // Augment each PR with position
+                let prRow = targetRow;
                 for (const pr of batch.pullRequests) {
                     pr.time = pr.queuetime;
-                    pr.row = currentRow;
-                    pr.endTime = pr.queuetime + pr.FastBuildTime;
-                    
+                    pr.row = prRow;
+                    pr.endTime = pr.queuetime + 2 * pr.FullBuildTime;
+
+                    // Track this PR's occupancy
+                    if (!rowOccupancy[prRow]) {
+                        rowOccupancy[prRow] = [];
+                    }
+                    rowOccupancy[prRow].push({start: pr.queuetime, end: pr.endTime});
+
                     if (pr.endTime > maxTime) {
                         maxTime = pr.endTime;
                     }
-                    
-                    currentRow++;
+
+                    prRow++;
                 }
 
                 // Augment batch separator with position
-                const lastPR = batch.pullRequests[batch.pullRequests.length - 1];
                 batch.time = lastPR.queuetime + lastPR.FastBuildTime;
-                batch.row = currentRow;
-                batch.endTime = batch.time + maxFullBuildTime;
-                
+                batch.row = prRow;
+                batch.endTime = batch.time + 2 * maxFullBuildTime;
+
+                // Track batch separator's occupancy
+                if (!rowOccupancy[prRow]) {
+                    rowOccupancy[prRow] = [];
+                }
+                rowOccupancy[prRow].push({start: batch.time, end: batch.endTime});
+
                 if (batch.endTime > maxTime) {
                     maxTime = batch.endTime;
                 }
-                
-                currentRow++;
+
+                // Update currentRow to be ready for next batch if it needs to go beyond existing rows
+                currentRow = Math.max(currentRow, prRow + 1);
+                maxRow = Math.max(maxRow, prRow + 1);
             }
-            
+
             maxRow = currentRow;
 
             // Phase 2: Calculate scaling based on coordinates
@@ -307,24 +368,29 @@
                     const y = Y_OFFSET + pr.row * ROW_HEIGHT;
                     const x = X_OFFSET + pr.time * TIME_SCALE;
 
-                    // Draw PR circle (black)
-                    ctx.fillStyle = 'black';
-                    ctx.beginPath();
-                    ctx.arc(x, y, PR_RADIUS, 0, 2 * Math.PI);
-                    ctx.fill();
-
                     // Draw fast build rectangle (green or red)
-                    ctx.fillStyle = pr.FastBuildPasses ? 'green' : 'red';
+                    ctx.fillStyle = 'green';
                     const fastBuildWidth = pr.FastBuildTime * TIME_SCALE;
-                    ctx.fillRect(x + PR_RADIUS, y - PR_RADIUS, fastBuildWidth, PR_RADIUS * 2);
+                    ctx.fillRect(x, y - PR_RADIUS, fastBuildWidth, PR_RADIUS * 2);
+
+                    // Draw PR circle (black)
+                    ctx.fillStyle = pr.FastBuildPasses ? 'black' : 'red';
+                    ctx.beginPath();
+                    ctx.arc(x, y, PR_RADIUS, 0.5 * Math.PI, 1.5 * Math.PI);
+                    ctx.fill();
                 }
 
                 // Draw batch separator (diamond and full build rectangle)
                 const diamondY = Y_OFFSET + batch.row * ROW_HEIGHT;
                 const diamondX = X_OFFSET + batch.time * TIME_SCALE;
 
+                // Draw full build rectangle (red)
+                ctx.fillStyle = batch.FullBuildPasses ? 'green' : 'red';
+                const fullBuildWidth = batch.maxFullBuildTime * TIME_SCALE;
+                ctx.fillRect(diamondX, diamondY - DIAMOND_SIZE, fullBuildWidth, DIAMOND_SIZE * 2);
+
                 // Draw diamond
-                ctx.fillStyle = 'blue';
+                ctx.fillStyle = batch.FullBuildPasses ? 'blue' : 'red';
                 ctx.beginPath();
                 ctx.moveTo(diamondX, diamondY - DIAMOND_SIZE);
                 ctx.lineTo(diamondX + DIAMOND_SIZE, diamondY);
@@ -333,10 +399,6 @@
                 ctx.closePath();
                 ctx.fill();
 
-                // Draw full build rectangle (red)
-                ctx.fillStyle = 'red';
-                const fullBuildWidth = batch.maxFullBuildTime * TIME_SCALE;
-                ctx.fillRect(diamondX + DIAMOND_SIZE, diamondY - DIAMOND_SIZE, fullBuildWidth, DIAMOND_SIZE * 2);
             }
         }
     </script>
