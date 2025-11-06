@@ -251,11 +251,14 @@
             let maxRow = 0;
 
             // Track all occupied time ranges by row for overlap detection
-            const rowOccupancy = []; // Array of arrays, each containing {start, end} time ranges
+	    let curVerticalStart = 0;
+	    let curVerticalEnd = 0;
 
             for (const batch of batches) {
                 // Find max full build time for this batch
                 let maxFullBuildTime = 0;
+		let minQueueTime = batch.pullRequests[0].queuetime;
+
                 for (const pr of batch.pullRequests) {
                     if (pr.FullBuildTime > maxFullBuildTime) {
                         maxFullBuildTime = pr.FullBuildTime;
@@ -271,53 +274,19 @@
                 const lastPR = batch.pullRequests[batch.pullRequests.length - 1];
                 const batchEndTime = lastPR.queuetime + lastPR.FastBuildTime + maxFullBuildTime;
 
-                // Try to find the lowest row where this batch fits without overlapping
-                let targetRow = 0;
-                let foundRow = false;
-
                 // Check if we can fit starting from row 0
-                for (let testRow = 0; testRow < currentRow; testRow++) {
-                    const numRowsNeeded = batch.pullRequests.length + 1; // PRs + batch separator
-                    let canFit = true;
-
-                    // Check if all rows needed by this batch are free in the time range
-                    for (let r = testRow; r < testRow + numRowsNeeded && r < rowOccupancy.length; r++) {
-                        if (rowOccupancy[r]) {
-                            for (const occupied of rowOccupancy[r]) {
-                                // Check for overlap: batch overlaps if it starts before occupied ends and ends after occupied starts
-                                if (batchStartTime < occupied.end && batchEndTime > occupied.start) {
-                                    canFit = false;
-                                    break;
-                                }
-                            }
-                        }
-                        if (!canFit) break;
-                    }
-
-                    if (canFit) {
-                        targetRow = testRow;
-                        foundRow = true;
-                        break;
-                    }
-                }
-
-                // If we couldn't find a lower row, use currentRow
-                if (!foundRow) {
-                    targetRow = currentRow;
+		if (currentRow > 0 && minQueueTime > curVerticalStart + (curVerticalEnd - curVerticalStart) / 2) {
+			currentRow = 0;
+			curVerticalStart = minQueueTime;
+			curVerticalEnd = minQueueTime;
                 }
 
                 // Augment each PR with position
-                let prRow = targetRow;
+                let prRow = currentRow;
                 for (const pr of batch.pullRequests) {
                     pr.time = pr.queuetime;
                     pr.row = prRow;
                     pr.endTime = pr.queuetime + 2 * pr.FullBuildTime;
-
-                    // Track this PR's occupancy
-                    if (!rowOccupancy[prRow]) {
-                        rowOccupancy[prRow] = [];
-                    }
-                    rowOccupancy[prRow].push({start: pr.queuetime, end: pr.endTime});
 
                     if (pr.endTime > maxTime) {
                         maxTime = pr.endTime;
@@ -331,15 +300,11 @@
                 batch.row = prRow;
                 batch.endTime = batch.time + 2 * maxFullBuildTime;
 
-                // Track batch separator's occupancy
-                if (!rowOccupancy[prRow]) {
-                    rowOccupancy[prRow] = [];
-                }
-                rowOccupancy[prRow].push({start: batch.time, end: batch.endTime});
-
                 if (batch.endTime > maxTime) {
                     maxTime = batch.endTime;
                 }
+
+		curVerticalEnd = batch.endTime;
 
                 // Update currentRow to be ready for next batch if it needs to go beyond existing rows
                 currentRow = Math.max(currentRow, prRow + 1);
@@ -362,11 +327,24 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // Phase 3: Render using the augmented coordinates
+            let prevX = null;
+            let prevY = null;
+
             for (const batch of batches) {
                 // Render each PR in the batch
                 for (const pr of batch.pullRequests) {
                     const y = Y_OFFSET + pr.row * ROW_HEIGHT;
                     const x = X_OFFSET + pr.time * TIME_SCALE;
+
+                    // Draw connecting line from previous element
+                    if (prevX !== null && prevY !== null) {
+                        ctx.strokeStyle = 'black';
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.moveTo(prevX, prevY);
+                        ctx.lineTo(x, y);
+                        ctx.stroke();
+                    }
 
                     // Draw fast build rectangle (green or red)
                     ctx.fillStyle = 'green';
@@ -378,11 +356,25 @@
                     ctx.beginPath();
                     ctx.arc(x, y, PR_RADIUS, 0.5 * Math.PI, 1.5 * Math.PI);
                     ctx.fill();
+
+                    // Update previous position
+                    prevX = x;
+                    prevY = y;
                 }
 
                 // Draw batch separator (diamond and full build rectangle)
                 const diamondY = Y_OFFSET + batch.row * ROW_HEIGHT;
                 const diamondX = X_OFFSET + batch.time * TIME_SCALE;
+
+                // Draw connecting line from previous element
+                if (prevX !== null && prevY !== null) {
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(prevX, prevY);
+                    ctx.lineTo(diamondX, diamondY);
+                    ctx.stroke();
+                }
 
                 // Draw full build rectangle (red)
                 ctx.fillStyle = batch.FullBuildPasses ? 'green' : 'red';
@@ -398,6 +390,10 @@
                 ctx.lineTo(diamondX - DIAMOND_SIZE, diamondY);
                 ctx.closePath();
                 ctx.fill();
+
+                // Update previous position
+                prevX = diamondX;
+                prevY = diamondY;
 
             }
         }
