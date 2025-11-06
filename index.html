@@ -147,7 +147,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('generateBtn').addEventListener('click', generatePullRequests);
             document.getElementById('simulateBtn').addEventListener('click', simulateAndRender);
-            
+
             // Prevent form submissions to keep inputs editable
             document.querySelectorAll('form').forEach(form => {
                 form.addEventListener('submit', function(e) {
@@ -186,9 +186,9 @@
 
                 for (let i = 0; i < pullRequests.length; i++) {
                     const pr = pullRequests[i];
-                    
+
                     // Check if we need to start a new batch
-                    const needNewBatch = !currentBatch || 
+                    const needNewBatch = !currentBatch ||
                                         currentBatch.pullRequests.length >= maxBatchSize ||
                                         currentBatchEndTime < pr.queuetime;
 
@@ -232,23 +232,23 @@
         function renderQueue(batches) {
             const canvas = document.getElementById('queueCanvas');
             const ctx = canvas.getContext('2d');
-            
+
             // Constants for rendering
             const ROW_HEIGHT = 30;
             const PR_RADIUS = 8;
             const DIAMOND_SIZE = 10;
             const X_OFFSET = 50;
             const Y_OFFSET = 50;
-            const TIME_SCALE = 0.1; // pixels per second
-            
-            // Calculate total rows needed and maximum width
+            const MAX_CANVAS_WIDTH = 10000; // Maximum canvas width to avoid browser issues
+
+            // Calculate total rows needed and maximum time
             let totalRows = 0;
-            let maxWidth = 0;
-            
+            let maxTime = 0;
+
             for (const batch of batches) {
                 totalRows += batch.pullRequests.length + 1; // PRs + batch separator row
-                
-                // Find the rightmost point (last PR's queue time + fast build + full build)
+
+                // Find the rightmost time point (last PR's queue time + fast build + full build)
                 const lastPR = batch.pullRequests[batch.pullRequests.length - 1];
                 let maxFullBuildTime = 0;
                 for (const pr of batch.pullRequests) {
@@ -256,28 +256,32 @@
                         maxFullBuildTime = pr.FullBuildTime;
                     }
                 }
-                const batchEndX = X_OFFSET + (lastPR.queuetime + lastPR.FastBuildTime + maxFullBuildTime) * TIME_SCALE;
-                if (batchEndX > maxWidth) {
-                    maxWidth = batchEndX;
+                const batchEndTime = lastPR.queuetime + lastPR.FastBuildTime + maxFullBuildTime;
+                if (batchEndTime > maxTime) {
+                    maxTime = batchEndTime;
                 }
             }
-            
+
+            // Calculate time scale to fit within max canvas width
+            const availableWidth = MAX_CANVAS_WIDTH - (2 * X_OFFSET);
+            const TIME_SCALE = availableWidth / maxTime; // pixels per second
+
             // Set canvas dimensions before drawing
             const requiredHeight = Y_OFFSET + (totalRows + 1) * ROW_HEIGHT;
-            const requiredWidth = maxWidth + X_OFFSET;
+            const requiredWidth = Math.min(MAX_CANVAS_WIDTH, (maxTime * TIME_SCALE) + (2 * X_OFFSET));
             canvas.height = Math.max(1000, requiredHeight);
             canvas.width = Math.max(2000, requiredWidth);
-            
+
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
+
             let currentRow = 0;
-            
+
             // Render each batch
             for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
                 const batch = batches[batchIndex];
                 const prs = batch.pullRequests;
-                
+
                 // Find max full build time for this batch
                 let maxFullBuildTime = 0;
                 for (const pr of prs) {
@@ -285,32 +289,32 @@
                         maxFullBuildTime = pr.FullBuildTime;
                     }
                 }
-                
+
                 // Render each PR in the batch
                 for (let prIndex = 0; prIndex < prs.length; prIndex++) {
                     const pr = prs[prIndex];
                     const y = Y_OFFSET + currentRow * ROW_HEIGHT;
                     const x = X_OFFSET + pr.queuetime * TIME_SCALE;
-                    
+
                     // Draw PR circle (black)
                     ctx.fillStyle = 'black';
                     ctx.beginPath();
                     ctx.arc(x, y, PR_RADIUS, 0, 2 * Math.PI);
                     ctx.fill();
-                    
+
                     // Draw fast build rectangle (green)
                     ctx.fillStyle = pr.FastBuildPasses ? 'green' : 'red';
                     const fastBuildWidth = pr.FastBuildTime * TIME_SCALE;
                     ctx.fillRect(x + PR_RADIUS, y - PR_RADIUS, fastBuildWidth, PR_RADIUS * 2);
-                    
+
                     currentRow++;
                 }
-                
+
                 // Draw batch separator (diamond and full build rectangle)
                 const lastPR = prs[prs.length - 1];
                 const diamondY = Y_OFFSET + currentRow * ROW_HEIGHT;
                 const diamondX = X_OFFSET + (lastPR.queuetime + lastPR.FastBuildTime) * TIME_SCALE;
-                
+
                 // Draw diamond
                 ctx.fillStyle = 'blue';
                 ctx.beginPath();
@@ -320,12 +324,12 @@
                 ctx.lineTo(diamondX - DIAMOND_SIZE, diamondY);
                 ctx.closePath();
                 ctx.fill();
-                
+
                 // Draw full build rectangle (red)
                 ctx.fillStyle = 'red';
                 const fullBuildWidth = maxFullBuildTime * TIME_SCALE;
                 ctx.fillRect(diamondX + DIAMOND_SIZE, diamondY - DIAMOND_SIZE, fullBuildWidth, DIAMOND_SIZE * 2);
-                
+
                 currentRow++;
             }
         }
