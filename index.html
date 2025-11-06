@@ -239,62 +239,73 @@
             const DIAMOND_SIZE = 10;
             const X_OFFSET = 50;
             const Y_OFFSET = 50;
-            const MAX_CANVAS_WIDTH = 10000; // Maximum canvas width to avoid browser issues
+            const MAX_CANVAS_WIDTH = 5000; // Maximum canvas width to avoid browser issues
 
-            // Calculate total rows needed and maximum time
-            let totalRows = 0;
+            // Phase 1: Augment objects with (time, row) coordinates
+            let currentRow = 0;
             let maxTime = 0;
+            let maxRow = 0;
 
             for (const batch of batches) {
-                totalRows += batch.pullRequests.length + 1; // PRs + batch separator row
-
-                // Find the rightmost time point (last PR's queue time + fast build + full build)
-                const lastPR = batch.pullRequests[batch.pullRequests.length - 1];
+                // Find max full build time for this batch
                 let maxFullBuildTime = 0;
                 for (const pr of batch.pullRequests) {
                     if (pr.FullBuildTime > maxFullBuildTime) {
                         maxFullBuildTime = pr.FullBuildTime;
                     }
                 }
-                const batchEndTime = lastPR.queuetime + lastPR.FastBuildTime + maxFullBuildTime;
-                if (batchEndTime > maxTime) {
-                    maxTime = batchEndTime;
-                }
-            }
+                
+                // Store batch-level info
+                batch.maxFullBuildTime = maxFullBuildTime;
+                batch.pullRequests_augmented = [];
 
-            // Calculate time scale to fit within max canvas width
+                // Augment each PR with position
+                for (const pr of batch.pullRequests) {
+                    pr.time = pr.queuetime;
+                    pr.row = currentRow;
+                    pr.endTime = pr.queuetime + pr.FastBuildTime;
+                    
+                    if (pr.endTime > maxTime) {
+                        maxTime = pr.endTime;
+                    }
+                    
+                    currentRow++;
+                }
+
+                // Augment batch separator with position
+                const lastPR = batch.pullRequests[batch.pullRequests.length - 1];
+                batch.time = lastPR.queuetime + lastPR.FastBuildTime;
+                batch.row = currentRow;
+                batch.endTime = batch.time + maxFullBuildTime;
+                
+                if (batch.endTime > maxTime) {
+                    maxTime = batch.endTime;
+                }
+                
+                currentRow++;
+            }
+            
+            maxRow = currentRow;
+
+            // Phase 2: Calculate scaling based on coordinates
             const availableWidth = MAX_CANVAS_WIDTH - (2 * X_OFFSET);
             const TIME_SCALE = availableWidth / maxTime; // pixels per second
+            const requiredHeight = Y_OFFSET + (maxRow + 1) * ROW_HEIGHT;
+            const requiredWidth = Math.min(MAX_CANVAS_WIDTH, (maxTime * TIME_SCALE) + (2 * X_OFFSET));
 
             // Set canvas dimensions before drawing
-            const requiredHeight = Y_OFFSET + (totalRows + 1) * ROW_HEIGHT;
-            const requiredWidth = Math.min(MAX_CANVAS_WIDTH, (maxTime * TIME_SCALE) + (2 * X_OFFSET));
             canvas.height = Math.max(1000, requiredHeight);
             canvas.width = Math.max(2000, requiredWidth);
 
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            let currentRow = 0;
-
-            // Render each batch
-            for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-                const batch = batches[batchIndex];
-                const prs = batch.pullRequests;
-
-                // Find max full build time for this batch
-                let maxFullBuildTime = 0;
-                for (const pr of prs) {
-                    if (pr.FullBuildTime > maxFullBuildTime) {
-                        maxFullBuildTime = pr.FullBuildTime;
-                    }
-                }
-
+            // Phase 3: Render using the augmented coordinates
+            for (const batch of batches) {
                 // Render each PR in the batch
-                for (let prIndex = 0; prIndex < prs.length; prIndex++) {
-                    const pr = prs[prIndex];
-                    const y = Y_OFFSET + currentRow * ROW_HEIGHT;
-                    const x = X_OFFSET + pr.queuetime * TIME_SCALE;
+                for (const pr of batch.pullRequests) {
+                    const y = Y_OFFSET + pr.row * ROW_HEIGHT;
+                    const x = X_OFFSET + pr.time * TIME_SCALE;
 
                     // Draw PR circle (black)
                     ctx.fillStyle = 'black';
@@ -302,18 +313,15 @@
                     ctx.arc(x, y, PR_RADIUS, 0, 2 * Math.PI);
                     ctx.fill();
 
-                    // Draw fast build rectangle (green)
+                    // Draw fast build rectangle (green or red)
                     ctx.fillStyle = pr.FastBuildPasses ? 'green' : 'red';
                     const fastBuildWidth = pr.FastBuildTime * TIME_SCALE;
                     ctx.fillRect(x + PR_RADIUS, y - PR_RADIUS, fastBuildWidth, PR_RADIUS * 2);
-
-                    currentRow++;
                 }
 
                 // Draw batch separator (diamond and full build rectangle)
-                const lastPR = prs[prs.length - 1];
-                const diamondY = Y_OFFSET + currentRow * ROW_HEIGHT;
-                const diamondX = X_OFFSET + (lastPR.queuetime + lastPR.FastBuildTime) * TIME_SCALE;
+                const diamondY = Y_OFFSET + batch.row * ROW_HEIGHT;
+                const diamondX = X_OFFSET + batch.time * TIME_SCALE;
 
                 // Draw diamond
                 ctx.fillStyle = 'blue';
@@ -327,10 +335,8 @@
 
                 // Draw full build rectangle (red)
                 ctx.fillStyle = 'red';
-                const fullBuildWidth = maxFullBuildTime * TIME_SCALE;
+                const fullBuildWidth = batch.maxFullBuildTime * TIME_SCALE;
                 ctx.fillRect(diamondX + DIAMOND_SIZE, diamondY - DIAMOND_SIZE, fullBuildWidth, DIAMOND_SIZE * 2);
-
-                currentRow++;
             }
         }
     </script>
