@@ -7,6 +7,7 @@
 
 <head>
 	<link rel="stylesheet" href="style.css" />
+	<script src="simple.js" />
 </head>
 
 <body style="background-color:#FFF">
@@ -201,52 +202,12 @@
 					return;
 				}
 
-				// Create batches
-				const batches = [];
-				let currentBatch = null;
-				let currentBatchEndTime = 0;
-
-				for (let i = 0; i < pullRequests.length; i++) {
-					const pr = pullRequests[i];
-
-					// Check if we need to start a new batch
-					const needNewBatch = !currentBatch ||
-						currentBatch.pullRequests.length >= maxBatchSize ||
-						currentBatchEndTime < pr.queuetime;
-
-					if (needNewBatch) {
-						// Save the previous batch if it exists
-						if (currentBatch) {
-							batches.push(currentBatch);
-						}
-
-						// Start a new batch
-						currentBatch = {
-							pullRequests: [],
-							FastBuildPasses: true,
-							FullBuildPasses: true
-						};
-						currentBatchEndTime = 0;
-					}
-
-					// Add PR to current batch
-					currentBatch.pullRequests.push(pr);
-					currentBatch.FastBuildPasses = currentBatch.FastBuildPasses && pr.FastBuildPasses;
-					currentBatch.FullBuildPasses = currentBatch.FullBuildPasses && pr.FullBuildPasses;
-
-					// Update the batch end time (when this PR's fast build would complete)
-					currentBatchEndTime = pr.queuetime + pr.FastBuildTime;
-				}
-
-				// Don't forget to add the last batch
-				if (currentBatch && currentBatch.pullRequests.length > 0) {
-					batches.push(currentBatch);
-				}
+				let result = simulateSimpleStrategy(pullRequests, maxBatchSize);
 
 				// Populate the output data textarea with JSON
-				document.getElementById('outputData').value = JSON.stringify(batches, null, 2);
+				document.getElementById('outputData').value = JSON.stringify(result, null, 2);
 
-				return batches;
+				return result;
 
 			} catch (error) {
 				alert('Error simulating queue: ' + error.message);
