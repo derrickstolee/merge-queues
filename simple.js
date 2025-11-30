@@ -115,6 +115,14 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
         prQueue.insert(pr.queuetime, pr);
     }
 
+    // Create result object
+    const result = {
+        Commits: [],
+        Builds: [],
+        Evictions: []
+    };
+
+    return result;
 }
 
 export { simulateSimpleStrategy };
