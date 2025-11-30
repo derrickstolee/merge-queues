@@ -81,6 +81,39 @@
 
 function simulateSimpleStrategy(pullRequests, maxBatchSize)
 {
+    // Priority queue to manage PRs by queue time
+    const prQueue = {
+        items: [],
+
+        // Add item with key
+        insert: function(key, value) {
+            this.items.push({ key: key, value: value });
+            this.items.sort((a, b) => a.key - b.key);
+        },
+
+        // Remove and return item with lowest key
+        removeMin: function() {
+            if (this.items.length === 0) {
+                return null;
+            }
+            return this.items.shift().value;
+        },
+
+        // Check if empty
+        isEmpty: function() {
+            return this.items.length === 0;
+        },
+
+        // Get size
+        size: function() {
+            return this.items.length;
+        }
+    };
+
+    // Initialize priority queue with pull requests using queuetime as key
+    for (const pr of pullRequests) {
+        prQueue.insert(pr.queuetime, pr);
+    }
 
 }
 
