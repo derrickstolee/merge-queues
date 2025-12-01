@@ -82,7 +82,7 @@
 function simulateSimpleStrategy(pullRequests, maxBatchSize)
 {
     // Priority queue to manage PRs by queue time
-    const prQueue = {
+    const eventQueue = {
         items: [],
 
         // Add item with key
@@ -112,7 +112,12 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
 
     // Initialize priority queue with pull requests using queuetime as key
     for (const pr of pullRequests) {
-        prQueue.insert(pr.queuetime, pr);
+	var event = {
+		time: pr.queueTime,
+		type: "PR commit",
+		obj: pr
+	};
+        eventQueue.insert(pr.queuetime, event);
     }
 
     // Create result object
@@ -121,6 +126,34 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
         Builds: [],
         Evictions: []
     };
+
+    // Simulate the on-line nature of the queue: only looking at events
+    // in time-based order.
+    while (eventQueue.size() > 0) {
+	var event = eventQueue.removeMin();
+
+	if (event.type == "PR commit")
+	{
+		// Perform queueing logic. Create build completion event.
+
+		var buildEndEvent = {
+			time: pr.queueTime + pr.FastBuildTime,
+			type: "Build completion",
+			obj: {
+				startTime: pr.queueTime,
+				duration: pr.FastBuildTime,
+				type: "fast",
+				passed: pr.FastBuildPasses,
+			}
+		};
+
+		eventQueue.insert(buildEndEvent);
+	}
+	else if (event.type == "Build completion")
+	{
+
+	}
+    }
 
     return result;
 }
