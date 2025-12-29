@@ -484,7 +484,8 @@ function calculateStatistics(result) {
         evictedPRs: result.Evictions.length,
         queuedBuilds: 0,
         canceledBuilds: 0,
-        waitingTimes: []
+        waitingTimes: [],
+        evictionTimes: []
     };
 
     // Count merged PRs and collect waiting times
@@ -497,6 +498,24 @@ function calculateStatistics(result) {
                 const waitingTime = batch.completedTime - pr.queuetime;
                 stats.waitingTimes.push(waitingTime);
             }
+        }
+    }
+
+    // Collect eviction times (eviction time - original queue time)
+    for (const eviction of result.Evictions) {
+        // Find the PR by ID to get its original queue time
+        const prId = eviction.prId;
+        let pr = null;
+
+        // Search through all batches to find the PR
+        for (const batch of result.batches) {
+            pr = batch.prs.find(p => p.id === prId);
+            if (pr) break;
+        }
+
+        if (pr && pr.queuetime !== undefined && eviction.time !== undefined) {
+            const evictionTime = eviction.time - pr.queuetime;
+            stats.evictionTimes.push(evictionTime);
         }
     }
 
@@ -528,6 +547,24 @@ function calculateStatistics(result) {
         stats.waitingTimeMedian = 0;
         stats.waitingTimeP80 = 0;
         stats.waitingTimeMax = 0;
+    }
+
+    // Calculate eviction time statistics
+    if (stats.evictionTimes.length > 0) {
+        stats.evictionTimes.sort((a, b) => a - b);
+
+        const median = stats.evictionTimes[Math.floor(stats.evictionTimes.length / 2)];
+        const p80Index = Math.floor(stats.evictionTimes.length * 0.8);
+        const p80 = stats.evictionTimes[p80Index];
+        const max = stats.evictionTimes[stats.evictionTimes.length - 1];
+
+        stats.evictionTimeMedian = median;
+        stats.evictionTimeP80 = p80;
+        stats.evictionTimeMax = max;
+    } else {
+        stats.evictionTimeMedian = 0;
+        stats.evictionTimeP80 = 0;
+        stats.evictionTimeMax = 0;
     }
 
     return stats;

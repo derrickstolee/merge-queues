@@ -110,7 +110,7 @@ function renderStatistics(stats) {
 					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${stats.canceledBuilds}</td>
 				</tr>
 				<tr style="background-color: #e8f4f8;">
-					<td colspan="2" style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Waiting Time Statistics</td>
+					<td colspan="2" style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Waiting Time Statistics (Merged PRs)</td>
 				</tr>
 				<tr>
 					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">Median</td>
@@ -123,6 +123,21 @@ function renderStatistics(stats) {
 				<tr>
 					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">Maximum</td>
 					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatTime(stats.waitingTimeMax)}</td>
+				</tr>
+				<tr style="background-color: #ffe8e8;">
+					<td colspan="2" style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Time to Eviction (Evicted PRs)</td>
+				</tr>
+				<tr>
+					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">Median</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatTime(stats.evictionTimeMedian)}</td>
+				</tr>
+				<tr style="background-color: #f9f9f9;">
+					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">80th Percentile</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatTime(stats.evictionTimeP80)}</td>
+				</tr>
+				<tr>
+					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">Maximum</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatTime(stats.evictionTimeMax)}</td>
 				</tr>
 			</tbody>
 		</table>
