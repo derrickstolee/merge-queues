@@ -50,9 +50,10 @@ function handleGenerate() {
  */
 function simulateAndRender() {
 	const result = simulateQueue();
-	if (result && result.pullRequests) {
+	if (result && result.batches) {
 		const canvas = document.getElementById('queueCanvas');
-		renderQueue(canvas, result.pullRequests);
+		// Pass all batches (including failed and canceled) to renderer
+		renderQueue(canvas, result.batches);
 	}
 }
 

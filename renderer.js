@@ -161,29 +161,56 @@ function renderToCanvas(canvas, batches, layout) {
 			const y = Y_OFFSET + pr.row * ROW_HEIGHT;
 			const x = X_OFFSET + pr.time * TIME_SCALE;
 
-			// Draw fast build rectangle (green or red)
-			ctx.fillStyle = 'green';
+			// Draw fast build rectangle (green if passed, red if failed)
+			ctx.fillStyle = pr.FastBuildPasses ? 'green' : 'red';
 			const fastBuildWidth = Math.min(1, pr.FastBuildTime * TIME_SCALE);
 			ctx.fillRect(x, y - PR_RADIUS, fastBuildWidth, PR_RADIUS * 2);
 
-			// Draw PR circle (black)
-			ctx.fillStyle = pr.FastBuildPasses ? 'black' : 'red';
-			ctx.beginPath();
-			ctx.arc(x, y, PR_RADIUS, 0.5 * Math.PI, 1.5 * Math.PI);
-			ctx.fill();
+			// Draw PR circle with different colors based on status
+			if (pr.evicted) {
+				// Evicted PRs: orange fill with red border
+				ctx.fillStyle = 'orange';
+				ctx.beginPath();
+				ctx.arc(x, y, PR_RADIUS, 0.5 * Math.PI, 1.5 * Math.PI);
+				ctx.fill();
+				ctx.strokeStyle = 'red';
+				ctx.lineWidth = 2;
+				ctx.stroke();
+			} else {
+				// Normal PRs: black if passed, red if failed
+				ctx.fillStyle = pr.FastBuildPasses ? 'black' : 'red';
+				ctx.beginPath();
+				ctx.arc(x, y, PR_RADIUS, 0.5 * Math.PI, 1.5 * Math.PI);
+				ctx.fill();
+			}
 		}
 
 		// Draw batch separator (diamond and full build rectangle)
 		const diamondY = Y_OFFSET + batch.row * ROW_HEIGHT;
 		const diamondX = X_OFFSET + batch.time * TIME_SCALE;
 
-		// Draw full build rectangle (red)
-		ctx.fillStyle = batch.FullBuildPasses ? 'green' : 'red';
+		// Draw full build rectangle based on batch status
+		if (batch.status === 'canceled') {
+			ctx.fillStyle = 'gray';
+		} else if (batch.status === 'failed') {
+			ctx.fillStyle = 'red';
+		} else {
+			ctx.fillStyle = batch.FullBuildPasses ? 'green' : 'red';
+		}
 		const fullBuildWidth = Math.min(1, batch.maxFullBuildTime * TIME_SCALE);
 		ctx.fillRect(diamondX, diamondY - DIAMOND_SIZE, fullBuildWidth, DIAMOND_SIZE * 2);
 
-		// Draw diamond
-		ctx.fillStyle = batch.FullBuildPasses ? 'blue' : 'red';
+		// Draw diamond based on batch status
+		if (batch.status === 'canceled') {
+			ctx.fillStyle = 'gray';
+		} else if (batch.status === 'failed') {
+			ctx.fillStyle = 'red';
+		} else if (batch.status === 'success') {
+			ctx.fillStyle = 'blue';
+		} else {
+			// Building state
+			ctx.fillStyle = 'yellow';
+		}
 		ctx.beginPath();
 		ctx.moveTo(diamondX, diamondY - DIAMOND_SIZE);
 		ctx.lineTo(diamondX + DIAMOND_SIZE, diamondY);
