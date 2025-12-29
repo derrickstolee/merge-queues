@@ -113,7 +113,7 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
     // Initialize priority queue with pull requests using queuetime as key
     for (const pr of pullRequests) {
 	var event = {
-		time: pr.queueTime,
+		time: pr.queuetime,
 		type: "PR commit",
 		obj: pr
 	};
@@ -137,17 +137,17 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
 		// Perform queueing logic. Create build completion event.
 
 		var buildEndEvent = {
-			time: pr.queueTime + pr.FastBuildTime,
+			time: event.obj.queuetime + event.obj.FastBuildTime,
 			type: "Build completion",
 			obj: {
-				startTime: pr.queueTime,
-				duration: pr.FastBuildTime,
+				startTime: event.obj.queuetime,
+				duration: event.obj.FastBuildTime,
 				type: "fast",
-				passed: pr.FastBuildPasses,
+				passed: event.obj.FastBuildPasses,
 			}
 		};
 
-		eventQueue.insert(buildEndEvent);
+		eventQueue.insert(buildEndEvent.time, buildEndEvent);
 	}
 	else if (event.type == "Build completion")
 	{
