@@ -102,19 +102,20 @@ function renderToCanvas(canvas, batches, layout) {
 		for (const entry of prEntries) {
 			const x = X_OFFSET + entry.queueTime * TIME_SCALE;
 
-			if (entry.isRequeued) {
-				// Requeued PR: gray circle (outline only)
+			// Use batch outcome to determine rendering
+			if (batch.status === 'success') {
+				// Successful batch: black filled dot
+				ctx.fillStyle = 'black';
+				ctx.beginPath();
+				ctx.arc(x, rowY, PR_RADIUS, 0, 2 * Math.PI);
+				ctx.fill();
+			} else {
+				// Failed/canceled/incomplete batch: gray circle (outline only)
 				ctx.strokeStyle = 'gray';
 				ctx.lineWidth = 2;
 				ctx.beginPath();
 				ctx.arc(x, rowY, PR_RADIUS, 0, 2 * Math.PI);
 				ctx.stroke();
-			} else {
-				// First-time PR: filled dot
-				ctx.fillStyle = 'black';
-				ctx.beginPath();
-				ctx.arc(x, rowY, PR_RADIUS, 0, 2 * Math.PI);
-				ctx.fill();
 			}
 
 			// If PR was evicted, draw gray X on top
@@ -206,22 +207,22 @@ function renderToCanvas(canvas, batches, layout) {
 
 	let legendYOffset = legendY;
 
-	// First-time PR
+	// PR in successful batch
 	ctx.fillStyle = 'black';
 	ctx.beginPath();
 	ctx.arc(legendX, legendYOffset, PR_RADIUS, 0, 2 * Math.PI);
 	ctx.fill();
-	ctx.fillText('PR queued', legendX + 15, legendYOffset + 4);
+	ctx.fillText('PR (merged)', legendX + 15, legendYOffset + 4);
 	legendYOffset += 20;
 
-	// Requeued PR
+	// PR in failed/canceled batch
 	ctx.strokeStyle = 'gray';
 	ctx.lineWidth = 2;
 	ctx.beginPath();
 	ctx.arc(legendX, legendYOffset, PR_RADIUS, 0, 2 * Math.PI);
 	ctx.stroke();
 	ctx.fillStyle = 'black';
-	ctx.fillText('PR requeued', legendX + 15, legendYOffset + 4);
+	ctx.fillText('PR (failed/canceled)', legendX + 15, legendYOffset + 4);
 	legendYOffset += 20;
 
 	// Evicted PR
