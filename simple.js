@@ -580,6 +580,62 @@ function calculateStatistics(result) {
         stats.evictionTimeMax = 0;
     }
 
+    // Calculate branch staleness statistics
+    // Staleness = time since last branch update
+    const branchUpdateTimes = [];
+    for (const batch of result.batches) {
+        if (batch.status === 'success' && batch.completedTime !== undefined) {
+            branchUpdateTimes.push(batch.completedTime);
+        }
+    }
+    branchUpdateTimes.sort((a, b) => a - b);
+
+    if (branchUpdateTimes.length > 0) {
+        // Find max simulation time
+        let maxSimTime = 0;
+        for (const batch of result.batches) {
+            if (batch.buildCompleteTime && batch.buildCompleteTime > maxSimTime) {
+                maxSimTime = batch.buildCompleteTime;
+            }
+            if (batch.canceledTime && batch.canceledTime > maxSimTime) {
+                maxSimTime = batch.canceledTime;
+            }
+        }
+
+        // Sample staleness every second
+        const stalenessSamples = [];
+        for (let t = 0; t <= maxSimTime; t++) {
+            // Find the most recent update before time t
+            let lastUpdateTime = 0;
+            for (const updateTime of branchUpdateTimes) {
+                if (updateTime <= t) {
+                    lastUpdateTime = updateTime;
+                } else {
+                    break;
+                }
+            }
+
+            const staleness = t - lastUpdateTime;
+            stalenessSamples.push(staleness);
+        }
+
+        // Calculate percentiles
+        stalenessSamples.sort((a, b) => a - b);
+
+        const median = stalenessSamples[Math.floor(stalenessSamples.length / 2)];
+        const p80Index = Math.floor(stalenessSamples.length * 0.8);
+        const p80 = stalenessSamples[p80Index];
+        const max = stalenessSamples[stalenessSamples.length - 1];
+
+        stats.stalenessMedian = median;
+        stats.stalenessP80 = p80;
+        stats.stalenessMax = max;
+    } else {
+        stats.stalenessMedian = 0;
+        stats.stalenessP80 = 0;
+        stats.stalenessMax = 0;
+    }
+
     return stats;
 }
 

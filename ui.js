@@ -147,8 +147,27 @@ function renderStatistics(stats) {
 					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">Maximum</td>
 					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatTime(stats.evictionTimeMax)}</td>
 				</tr>
+				<tr style="background-color: #e8f4f8;">
+					<td colspan="2" style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Branch Staleness</td>
+				</tr>
+				<tr>
+					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">Median</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatTime(stats.stalenessMedian)}</td>
+				</tr>
+				<tr style="background-color: #f9f9f9;">
+					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">80th Percentile</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatTime(stats.stalenessP80)}</td>
+				</tr>
+				<tr>
+					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">Maximum</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatTime(stats.stalenessMax)}</td>
+				</tr>
 			</tbody>
 		</table>
+		<p style="margin-top: 10px; font-size: 12px; color: #666;">
+			<strong>Branch Staleness:</strong> Time since the last successful merge at any given second.
+			Lower values mean the branch is updated more frequently.
+		</p>
 	`;
 
 	container.innerHTML = html;
