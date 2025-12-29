@@ -1,230 +1,260 @@
 /**
  * Renderer module for visualizing merge queue simulation results
+ * New design: row per batch, showing PR events, batch creation, and completion
  */
 
 /**
- * Calculates layout coordinates for batches and PRs
- * @param {Array} batches - Array of batch objects with pull requests
- * @returns {Object} Layout information including max dimensions
+ * Calculates layout for row-per-batch visualization
+ * @param {Array} batches - Array of batch objects
+ * @returns {Object} Layout information including dimensions
  */
 function calculateLayout(batches) {
-	let currentRow = 0;
 	let maxTime = 0;
-	let maxRow = 0;
 
-	// Track all occupied time ranges by row for overlap detection
-	let curVerticalStart = 0;
-	let curVerticalEnd = 0;
-
+	// Find the maximum time across all events
 	for (const batch of batches) {
-		// Find max full build time for this batch
-		let maxFullBuildTime = 0;
-		let minQueueTime = batch.pullRequests[0].queuetime;
-
-		for (const pr of batch.pullRequests) {
-			if (pr.FullBuildTime > maxFullBuildTime) {
-				maxFullBuildTime = pr.FullBuildTime;
+		// Check PR queue times
+		for (const entry of batch.prEntries) {
+			if (entry.queueTime > maxTime) {
+				maxTime = entry.queueTime;
 			}
 		}
 
-		// Store batch-level info
-		batch.maxFullBuildTime = maxFullBuildTime;
-		batch.pullRequests_augmented = [];
-
-		// Calculate the time range this batch will occupy
-		const batchStartTime = batch.pullRequests[0].queuetime;
-		const lastPR = batch.pullRequests[batch.pullRequests.length - 1];
-		const batchEndTime = lastPR.queuetime + lastPR.FastBuildTime + maxFullBuildTime;
-
-		// Check if we can fit starting from row 0
-		if (currentRow > 0 && minQueueTime > curVerticalStart + (curVerticalEnd - curVerticalStart) / 2) {
-			currentRow = 0;
-			curVerticalStart = minQueueTime;
-			curVerticalEnd = minQueueTime;
+		// Check batch create time
+		if (batch.batchCreateTime && batch.batchCreateTime > maxTime) {
+			maxTime = batch.batchCreateTime;
 		}
 
-		// Augment each PR with position
-		let prRow = currentRow;
-		for (const pr of batch.pullRequests) {
-			pr.time = pr.queuetime;
-			pr.row = prRow;
-			pr.endTime = pr.queuetime + 2 * pr.FullBuildTime;
-
-			if (pr.endTime > maxTime) {
-				maxTime = pr.endTime;
-			}
-
-			prRow++;
+		// Check build complete time
+		if (batch.buildCompleteTime && batch.buildCompleteTime > maxTime) {
+			maxTime = batch.buildCompleteTime;
 		}
-
-		// Augment batch separator with position
-		batch.time = lastPR.queuetime + lastPR.FastBuildTime;
-		batch.row = prRow;
-		batch.endTime = batch.time + 2 * maxFullBuildTime;
-
-		if (batch.endTime > maxTime) {
-			maxTime = batch.endTime;
-		}
-
-		curVerticalEnd = batch.endTime;
-
-		// Update currentRow to be ready for next batch if it needs to go beyond existing rows
-		currentRow = Math.max(currentRow, prRow + 1);
-		maxRow = Math.max(maxRow, prRow + 1);
 	}
-
-	maxRow = currentRow;
 
 	return {
 		maxTime,
-		maxRow
+		numRows: batches.length
 	};
 }
 
 /**
  * Renders the queue visualization on a canvas
  * @param {HTMLCanvasElement} canvas - The canvas element to render on
- * @param {Array} batches - Array of batch objects (with layout already calculated)
+ * @param {Array} batches - Array of batch objects with lifecycle events
  * @param {Object} layout - Layout information from calculateLayout
  */
 function renderToCanvas(canvas, batches, layout) {
 	const ctx = canvas.getContext('2d');
-	const { maxTime, maxRow } = layout;
+	const { maxTime, numRows } = layout;
 
 	// Constants for rendering
-	const ROW_HEIGHT = 30;
-	const PR_RADIUS = 8;
-	const DIAMOND_SIZE = 10;
-	const X_OFFSET = 50;
-	const Y_OFFSET = 50;
-	const MAX_CANVAS_WIDTH = 5000; // Maximum canvas width to avoid browser issues
+	const ROW_HEIGHT = 40;
+	const PR_RADIUS = 6;
+	const DIAMOND_SIZE = 8;
+	const SQUARE_SIZE = 10;
+	const X_OFFSET = 80;
+	const Y_OFFSET = 30;
+	const MAX_CANVAS_WIDTH = 5000;
 
-	// Calculate scaling based on coordinates
+	// Calculate scaling
 	const availableWidth = MAX_CANVAS_WIDTH - (2 * X_OFFSET);
-	const TIME_SCALE = availableWidth / maxTime; // pixels per second
-	const requiredHeight = Y_OFFSET + (maxRow + 1) * ROW_HEIGHT;
+	const TIME_SCALE = availableWidth / (maxTime || 1);
+	const requiredHeight = Y_OFFSET + numRows * ROW_HEIGHT + Y_OFFSET;
 	const requiredWidth = Math.min(MAX_CANVAS_WIDTH, (maxTime * TIME_SCALE) + (2 * X_OFFSET));
 
-	// Set canvas dimensions before drawing
-	canvas.height = Math.max(1000, requiredHeight);
-	canvas.width = Math.max(2000, requiredWidth);
+	// Set canvas dimensions
+	canvas.height = Math.max(600, requiredHeight);
+	canvas.width = Math.max(1200, requiredWidth);
 
 	// Clear canvas
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-	// Step 1: Draw all connecting lines first
-	let prevX = null;
-	let prevY = null;
-
-	ctx.strokeStyle = 'black';
-	ctx.lineWidth = 3;
-
-	for (const batch of batches) {
-		// Draw lines to each PR in the batch
-		for (const pr of batch.pullRequests) {
-			const y = Y_OFFSET + pr.row * ROW_HEIGHT;
-			const x = X_OFFSET + pr.time * TIME_SCALE;
-
-			// Draw connecting line from previous element
-			if (prevX !== null && prevY !== null) {
-				ctx.beginPath();
-				ctx.moveTo(prevX, prevY);
-				ctx.lineTo(x, y);
-				ctx.stroke();
-			}
-
-			// Update previous position
-			prevX = x;
-			prevY = y;
-		}
-
-		// Draw line to batch separator
-		const diamondY = Y_OFFSET + batch.row * ROW_HEIGHT;
-		const diamondX = X_OFFSET + batch.time * TIME_SCALE;
-
-		if (prevX !== null && prevY !== null) {
-			ctx.beginPath();
-			ctx.moveTo(prevX, prevY);
-			ctx.lineTo(diamondX, diamondY);
-			ctx.stroke();
-		}
-
-		// Update previous position
-		prevX = diamondX;
-		prevY = diamondY;
+	// Draw background grid (optional light gray lines)
+	ctx.strokeStyle = '#f0f0f0';
+	ctx.lineWidth = 1;
+	for (let i = 0; i <= numRows; i++) {
+		const y = Y_OFFSET + i * ROW_HEIGHT;
+		ctx.beginPath();
+		ctx.moveTo(X_OFFSET, y);
+		ctx.lineTo(canvas.width - X_OFFSET, y);
+		ctx.stroke();
 	}
 
-	// Step 2: Draw all other elements (rectangles, circles, diamonds)
-	for (const batch of batches) {
-		// Render each PR in the batch
-		for (const pr of batch.pullRequests) {
-			const y = Y_OFFSET + pr.row * ROW_HEIGHT;
-			const x = X_OFFSET + pr.time * TIME_SCALE;
+	// Draw each batch in its row
+	for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+		const batch = batches[batchIndex];
+		const rowY = Y_OFFSET + batchIndex * ROW_HEIGHT + ROW_HEIGHT / 2;
 
-			// Draw fast build rectangle (green if passed, red if failed)
-			ctx.fillStyle = pr.FastBuildPasses ? 'green' : 'red';
-			const fastBuildWidth = Math.min(1, pr.FastBuildTime * TIME_SCALE);
-			ctx.fillRect(x, y - PR_RADIUS, fastBuildWidth, PR_RADIUS * 2);
+		// Draw batch label
+		ctx.fillStyle = 'black';
+		ctx.font = '12px monospace';
+		ctx.textAlign = 'right';
+		ctx.fillText(`Batch ${batchIndex}`, X_OFFSET - 10, rowY + 4);
 
-			// Draw PR circle with different colors based on status
-			if (pr.evicted) {
-				// Evicted PRs: orange fill with red border
-				ctx.fillStyle = 'orange';
-				ctx.beginPath();
-				ctx.arc(x, y, PR_RADIUS, 0.5 * Math.PI, 1.5 * Math.PI);
-				ctx.fill();
-				ctx.strokeStyle = 'red';
+		// Draw PR events
+		for (const entry of batch.prEntries) {
+			const x = X_OFFSET + entry.queueTime * TIME_SCALE;
+
+			if (entry.isRequeued) {
+				// Requeued PR: gray circle (outline only)
+				ctx.strokeStyle = 'gray';
 				ctx.lineWidth = 2;
+				ctx.beginPath();
+				ctx.arc(x, rowY, PR_RADIUS, 0, 2 * Math.PI);
 				ctx.stroke();
 			} else {
-				// Normal PRs: black if passed, red if failed
-				ctx.fillStyle = pr.FastBuildPasses ? 'black' : 'red';
+				// First-time PR: filled dot
+				ctx.fillStyle = 'black';
 				ctx.beginPath();
-				ctx.arc(x, y, PR_RADIUS, 0.5 * Math.PI, 1.5 * Math.PI);
+				ctx.arc(x, rowY, PR_RADIUS, 0, 2 * Math.PI);
 				ctx.fill();
+			}
+
+			// If PR was evicted, draw gray X on top
+			if (entry.pr.evicted) {
+				ctx.strokeStyle = 'gray';
+				ctx.lineWidth = 2;
+				const xSize = PR_RADIUS + 2;
+				ctx.beginPath();
+				ctx.moveTo(x - xSize, rowY - xSize);
+				ctx.lineTo(x + xSize, rowY + xSize);
+				ctx.moveTo(x + xSize, rowY - xSize);
+				ctx.lineTo(x - xSize, rowY + xSize);
+				ctx.stroke();
 			}
 		}
 
-		// Draw batch separator (diamond and full build rectangle)
-		const diamondY = Y_OFFSET + batch.row * ROW_HEIGHT;
-		const diamondX = X_OFFSET + batch.time * TIME_SCALE;
+		// Draw batch creation diamond
+		if (batch.batchCreateTime !== undefined) {
+			const diamondX = X_OFFSET + batch.batchCreateTime * TIME_SCALE;
 
-		// Draw full build rectangle based on batch status
-		if (batch.status === 'canceled') {
-			ctx.fillStyle = 'gray';
-		} else if (batch.status === 'failed') {
-			ctx.fillStyle = 'red';
-		} else {
-			ctx.fillStyle = batch.FullBuildPasses ? 'green' : 'red';
-		}
-		const fullBuildWidth = Math.min(1, batch.maxFullBuildTime * TIME_SCALE);
-		ctx.fillRect(diamondX, diamondY - DIAMOND_SIZE, fullBuildWidth, DIAMOND_SIZE * 2);
-
-		// Draw diamond based on batch status
-		if (batch.status === 'canceled') {
-			ctx.fillStyle = 'gray';
-		} else if (batch.status === 'failed') {
-			ctx.fillStyle = 'red';
-		} else if (batch.status === 'success') {
 			ctx.fillStyle = 'blue';
-		} else {
-			// Building state
-			ctx.fillStyle = 'yellow';
+			ctx.beginPath();
+			ctx.moveTo(diamondX, rowY - DIAMOND_SIZE);
+			ctx.lineTo(diamondX + DIAMOND_SIZE, rowY);
+			ctx.lineTo(diamondX, rowY + DIAMOND_SIZE);
+			ctx.lineTo(diamondX - DIAMOND_SIZE, rowY);
+			ctx.closePath();
+			ctx.fill();
 		}
-		ctx.beginPath();
-		ctx.moveTo(diamondX, diamondY - DIAMOND_SIZE);
-		ctx.lineTo(diamondX + DIAMOND_SIZE, diamondY);
-		ctx.lineTo(diamondX, diamondY + DIAMOND_SIZE);
-		ctx.lineTo(diamondX - DIAMOND_SIZE, diamondY);
-		ctx.closePath();
-		ctx.fill();
+
+		// Draw build completion
+		if (batch.buildCompleteTime !== undefined) {
+			const completeX = X_OFFSET + batch.buildCompleteTime * TIME_SCALE;
+
+			if (batch.status === 'success') {
+				// Green square for success
+				ctx.fillStyle = 'green';
+				ctx.fillRect(
+					completeX - SQUARE_SIZE / 2,
+					rowY - SQUARE_SIZE / 2,
+					SQUARE_SIZE,
+					SQUARE_SIZE
+				);
+			} else if (batch.status === 'failed' || batch.status === 'canceled') {
+				// Red X for failure
+				ctx.strokeStyle = 'red';
+				ctx.lineWidth = 3;
+				const xSize = SQUARE_SIZE;
+				ctx.beginPath();
+				ctx.moveTo(completeX - xSize, rowY - xSize);
+				ctx.lineTo(completeX + xSize, rowY + xSize);
+				ctx.moveTo(completeX + xSize, rowY - xSize);
+				ctx.lineTo(completeX - xSize, rowY + xSize);
+				ctx.stroke();
+			}
+
+			// Draw line from diamond to completion marker
+			if (batch.batchCreateTime !== undefined) {
+				const diamondX = X_OFFSET + batch.batchCreateTime * TIME_SCALE;
+				ctx.strokeStyle = '#ccc';
+				ctx.lineWidth = 1;
+				ctx.setLineDash([5, 3]);
+				ctx.beginPath();
+				ctx.moveTo(diamondX, rowY);
+				ctx.lineTo(completeX, rowY);
+				ctx.stroke();
+				ctx.setLineDash([]);
+			}
+		}
 	}
+
+	// Draw legend
+	const legendX = canvas.width - 200;
+	const legendY = 20;
+	ctx.font = '11px sans-serif';
+	ctx.textAlign = 'left';
+
+	let legendYOffset = legendY;
+
+	// First-time PR
+	ctx.fillStyle = 'black';
+	ctx.beginPath();
+	ctx.arc(legendX, legendYOffset, PR_RADIUS, 0, 2 * Math.PI);
+	ctx.fill();
+	ctx.fillText('PR queued', legendX + 15, legendYOffset + 4);
+	legendYOffset += 20;
+
+	// Requeued PR
+	ctx.strokeStyle = 'gray';
+	ctx.lineWidth = 2;
+	ctx.beginPath();
+	ctx.arc(legendX, legendYOffset, PR_RADIUS, 0, 2 * Math.PI);
+	ctx.stroke();
+	ctx.fillStyle = 'black';
+	ctx.fillText('PR requeued', legendX + 15, legendYOffset + 4);
+	legendYOffset += 20;
+
+	// Evicted PR
+	ctx.strokeStyle = 'gray';
+	ctx.lineWidth = 2;
+	const xSize = PR_RADIUS + 2;
+	ctx.beginPath();
+	ctx.moveTo(legendX - xSize, legendYOffset - xSize);
+	ctx.lineTo(legendX + xSize, legendYOffset + xSize);
+	ctx.moveTo(legendX + xSize, legendYOffset - xSize);
+	ctx.lineTo(legendX - xSize, legendYOffset + xSize);
+	ctx.stroke();
+	ctx.fillText('PR evicted', legendX + 15, legendYOffset + 4);
+	legendYOffset += 20;
+
+	// Batch created
+	ctx.fillStyle = 'blue';
+	ctx.beginPath();
+	ctx.moveTo(legendX, legendYOffset - DIAMOND_SIZE);
+	ctx.lineTo(legendX + DIAMOND_SIZE, legendYOffset);
+	ctx.lineTo(legendX, legendYOffset + DIAMOND_SIZE);
+	ctx.lineTo(legendX - DIAMOND_SIZE, legendYOffset);
+	ctx.closePath();
+	ctx.fill();
+	ctx.fillStyle = 'black';
+	ctx.fillText('Batch created', legendX + 15, legendYOffset + 4);
+	legendYOffset += 20;
+
+	// Success
+	ctx.fillStyle = 'green';
+	ctx.fillRect(legendX - SQUARE_SIZE / 2, legendYOffset - SQUARE_SIZE / 2, SQUARE_SIZE, SQUARE_SIZE);
+	ctx.fillStyle = 'black';
+	ctx.fillText('Merged', legendX + 15, legendYOffset + 4);
+	legendYOffset += 20;
+
+	// Failed
+	ctx.strokeStyle = 'red';
+	ctx.lineWidth = 3;
+	ctx.beginPath();
+	ctx.moveTo(legendX - SQUARE_SIZE, legendYOffset - SQUARE_SIZE);
+	ctx.lineTo(legendX + SQUARE_SIZE, legendYOffset + SQUARE_SIZE);
+	ctx.moveTo(legendX + SQUARE_SIZE, legendYOffset - SQUARE_SIZE);
+	ctx.lineTo(legendX - SQUARE_SIZE, legendYOffset + SQUARE_SIZE);
+	ctx.stroke();
+	ctx.fillStyle = 'black';
+	ctx.fillText('Failed', legendX + 15, legendYOffset + 4);
 }
 
 /**
  * Main entry point: renders the queue visualization
  * @param {HTMLCanvasElement} canvas - The canvas element to render on
- * @param {Array} batches - Array of batch objects with pull requests
+ * @param {Array} batches - Array of batch objects with lifecycle events
  */
 export function renderQueue(canvas, batches) {
 	const layout = calculateLayout(batches);
