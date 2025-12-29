@@ -137,15 +137,18 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
     const state = {
         currentBatch: {
             prs: [],
+            prEntries: [], // {pr, queueTime, isRequeued}
             fastBuildStatus: {} // prId -> {completed, passed}
         },
         activeBatches: [], // Batches with full builds running
-        prMap: {} // id -> pr object
+        prMap: {}, // id -> pr object
+        prAppearances: {} // prId -> count (to detect requeues)
     };
 
-    // Initialize PR map
+    // Initialize PR map and appearance tracking
     for (const pr of pullRequests) {
         state.prMap[pr.id] = pr;
+        state.prAppearances[pr.id] = 0;
     }
 
     // Result tracking
@@ -177,9 +180,12 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
         const batchId = nextBatchId++;
         const batch = {
             id: batchId,
+            rowNumber: nextBatchId - 1, // Row in visualization
             prs: [...state.currentBatch.prs],
-            pullRequests: [...state.currentBatch.prs], // For renderer compatibility
-            startTime: currentTime,
+            prEntries: [...state.currentBatch.prEntries], // Detailed PR entry info
+            pullRequests: [...state.currentBatch.prs], // For backwards compatibility
+            batchCreateTime: currentTime,
+            startTime: currentTime, // For backwards compatibility
             status: 'building' // Will be updated to 'success', 'failed', or 'canceled'
         };
 
@@ -197,7 +203,7 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
 
         batch.fullBuildTime = maxFullBuildTime;
         batch.fullBuildPasses = allPass;
-        batch.FullBuildPasses = allPass; // For renderer compatibility
+        batch.FullBuildPasses = allPass; // For backwards compatibility
 
         // Add to active batches and results
         state.activeBatches.push(batch);
@@ -215,6 +221,7 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
         // Reset current batch
         state.currentBatch = {
             prs: [],
+            prEntries: [],
             fastBuildStatus: {}
         };
     }
@@ -261,14 +268,24 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
         if (state.currentBatch.prs.some(pr => prIds.has(pr.id))) {
             state.currentBatch = {
                 prs: [],
+                prEntries: [],
                 fastBuildStatus: {}
             };
         }
 
         // Re-batch PRs
         for (const pr of prsToRebatch) {
+            // Check if this PR has appeared before (requeue)
+            const isRequeued = state.prAppearances[pr.id] > 0;
+            state.prAppearances[pr.id]++;
+
             // Add to current batch
             state.currentBatch.prs.push(pr);
+            state.currentBatch.prEntries.push({
+                pr: pr,
+                queueTime: currentTime, // Re-queue time
+                isRequeued: isRequeued
+            });
             state.currentBatch.fastBuildStatus[pr.id] = {
                 completed: false,
                 passed: false
@@ -298,8 +315,17 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
         if (event.type === "PR commit") {
             const pr = state.prMap[event.prId];
 
+            // Check if this PR has appeared before (should be first time here)
+            const isRequeued = state.prAppearances[pr.id] > 0;
+            state.prAppearances[pr.id]++;
+
             // Add to current batch
             state.currentBatch.prs.push(pr);
+            state.currentBatch.prEntries.push({
+                pr: pr,
+                queueTime: currentTime,
+                isRequeued: isRequeued
+            });
             state.currentBatch.fastBuildStatus[pr.id] = {
                 completed: false,
                 passed: false
@@ -387,10 +413,12 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
             const batch = state.activeBatches.find(b => b.id === event.batchId);
             if (!batch) continue; // Already canceled
 
+            batch.buildCompleteTime = currentTime;
+
             if (event.passed) {
                 // Success - branch update
                 batch.status = 'success';
-                batch.completedTime = currentTime;
+                batch.completedTime = currentTime; // For backwards compatibility
 
                 // Add to pullRequests for backwards compatibility with renderer
                 result.pullRequests.push(batch);
@@ -400,7 +428,7 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
             } else {
                 // Failure - mark batch and evict all PRs
                 batch.status = 'failed';
-                batch.failedTime = currentTime;
+                batch.failedTime = currentTime; // For backwards compatibility
 
                 for (const pr of batch.prs) {
                     pr.evicted = true;
