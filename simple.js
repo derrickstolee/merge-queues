@@ -456,6 +456,22 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
         }
     }
 
+    // Handle any remaining PRs in currentBatch at end of simulation
+    if (state.currentBatch.prs.length > 0) {
+        const batchId = nextBatchId++;
+        const batch = {
+            id: batchId,
+            rowNumber: nextBatchId - 1,
+            prs: [...state.currentBatch.prs],
+            prEntries: [...state.currentBatch.prEntries],
+            pullRequests: [...state.currentBatch.prs],
+            batchCreateTime: undefined, // Not closed, so no batch create time
+            startTime: undefined,
+            status: 'incomplete' // Special status for incomplete batches
+        };
+        result.batches.push(batch);
+    }
+
     return result;
 }
 

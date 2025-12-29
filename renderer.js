@@ -94,7 +94,8 @@ function renderToCanvas(canvas, batches, layout) {
 		ctx.fillStyle = 'black';
 		ctx.font = '12px monospace';
 		ctx.textAlign = 'right';
-		ctx.fillText(`Batch ${batchIndex}`, X_OFFSET - 10, rowY + 4);
+		const label = batch.status === 'incomplete' ? `Batch ${batchIndex}*` : `Batch ${batchIndex}`;
+		ctx.fillText(label, X_OFFSET - 10, rowY + 4);
 
 		// Draw PR events
 		for (const entry of batch.prEntries) {
@@ -279,6 +280,12 @@ function renderToCanvas(canvas, batches, layout) {
 	ctx.stroke();
 	ctx.fillStyle = 'black';
 	ctx.fillText('Canceled', legendX + 15, legendYOffset + 4);
+	legendYOffset += 20;
+
+	// Incomplete batch note
+	ctx.fillStyle = 'black';
+	ctx.font = '10px sans-serif';
+	ctx.fillText('* = Incomplete batch', legendX - 5, legendYOffset + 4);
 }
 
 /**
