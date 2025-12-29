@@ -283,7 +283,7 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
             state.currentBatch.prs.push(pr);
             state.currentBatch.prEntries.push({
                 pr: pr,
-                queueTime: currentTime, // Re-queue time
+                queueTime: pr.queuetime, // Original queue time (never changes)
                 isRequeued: isRequeued
             });
             state.currentBatch.fastBuildStatus[pr.id] = {
@@ -323,7 +323,7 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
             state.currentBatch.prs.push(pr);
             state.currentBatch.prEntries.push({
                 pr: pr,
-                queueTime: currentTime,
+                queueTime: pr.queuetime, // Original queue time (never changes)
                 isRequeued: isRequeued
             });
             state.currentBatch.fastBuildStatus[pr.id] = {
