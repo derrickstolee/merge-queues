@@ -49,10 +49,10 @@ function handleGenerate() {
  * Runs the simulation and renders the results
  */
 function simulateAndRender() {
-	const batches = simulateQueue();
-	if (batches) {
+	const result = simulateQueue();
+	if (result && result.pullRequests) {
 		const canvas = document.getElementById('queueCanvas');
-		renderQueue(canvas, batches);
+		renderQueue(canvas, result.pullRequests);
 	}
 }
 
