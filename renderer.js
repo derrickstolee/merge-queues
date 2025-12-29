@@ -29,6 +29,11 @@ function calculateLayout(batches) {
 		if (batch.buildCompleteTime && batch.buildCompleteTime > maxTime) {
 			maxTime = batch.buildCompleteTime;
 		}
+
+		// Check canceled time
+		if (batch.canceledTime && batch.canceledTime > maxTime) {
+			maxTime = batch.canceledTime;
+		}
 	}
 
 	return {
@@ -138,9 +143,10 @@ function renderToCanvas(canvas, batches, layout) {
 			ctx.fill();
 		}
 
-		// Draw build completion
-		if (batch.buildCompleteTime !== undefined) {
-			const completeX = X_OFFSET + batch.buildCompleteTime * TIME_SCALE;
+		// Draw build completion or cancellation
+		const completionTime = batch.buildCompleteTime || batch.canceledTime;
+		if (completionTime !== undefined) {
+			const completeX = X_OFFSET + completionTime * TIME_SCALE;
 
 			if (batch.status === 'success') {
 				// Green square for success
@@ -151,7 +157,7 @@ function renderToCanvas(canvas, batches, layout) {
 					SQUARE_SIZE,
 					SQUARE_SIZE
 				);
-			} else if (batch.status === 'failed' || batch.status === 'canceled') {
+			} else if (batch.status === 'failed') {
 				// Red X for failure
 				ctx.strokeStyle = 'red';
 				ctx.lineWidth = 3;
@@ -162,9 +168,20 @@ function renderToCanvas(canvas, batches, layout) {
 				ctx.moveTo(completeX + xSize, rowY - xSize);
 				ctx.lineTo(completeX - xSize, rowY + xSize);
 				ctx.stroke();
+			} else if (batch.status === 'canceled') {
+				// Gray X for canceled
+				ctx.strokeStyle = 'gray';
+				ctx.lineWidth = 3;
+				const xSize = SQUARE_SIZE;
+				ctx.beginPath();
+				ctx.moveTo(completeX - xSize, rowY - xSize);
+				ctx.lineTo(completeX + xSize, rowY + xSize);
+				ctx.moveTo(completeX + xSize, rowY - xSize);
+				ctx.lineTo(completeX - xSize, rowY + xSize);
+				ctx.stroke();
 			}
 
-			// Draw line from diamond to completion marker
+			// Draw line from diamond to completion/cancellation marker
 			if (batch.batchCreateTime !== undefined) {
 				const diamondX = X_OFFSET + batch.batchCreateTime * TIME_SCALE;
 				ctx.strokeStyle = '#ccc';
@@ -249,6 +266,19 @@ function renderToCanvas(canvas, batches, layout) {
 	ctx.stroke();
 	ctx.fillStyle = 'black';
 	ctx.fillText('Failed', legendX + 15, legendYOffset + 4);
+	legendYOffset += 20;
+
+	// Canceled
+	ctx.strokeStyle = 'gray';
+	ctx.lineWidth = 3;
+	ctx.beginPath();
+	ctx.moveTo(legendX - SQUARE_SIZE, legendYOffset - SQUARE_SIZE);
+	ctx.lineTo(legendX + SQUARE_SIZE, legendYOffset + SQUARE_SIZE);
+	ctx.moveTo(legendX + SQUARE_SIZE, legendYOffset - SQUARE_SIZE);
+	ctx.lineTo(legendX - SQUARE_SIZE, legendYOffset + SQUARE_SIZE);
+	ctx.stroke();
+	ctx.fillStyle = 'black';
+	ctx.fillText('Canceled', legendX + 15, legendYOffset + 4);
 }
 
 /**
