@@ -102,6 +102,14 @@ function renderStatistics(stats) {
 					<td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: bold; color: red;">${stats.evictedPRs}</td>
 				</tr>
 				<tr>
+					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">Fairly Evicted (fast build failed)</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: #cc6600;">${stats.fairlyEvictedPRs}</td>
+				</tr>
+				<tr style="background-color: #f9f9f9;">
+					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">Unfairly Evicted (full build failed)</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: #cc0000;">${stats.unfairlyEvictedPRs}</td>
+				</tr>
+				<tr>
 					<td style="border: 1px solid #ddd; padding: 8px;">Queued Builds</td>
 					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${stats.queuedBuilds}</td>
 				</tr>

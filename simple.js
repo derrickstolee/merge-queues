@@ -482,11 +482,24 @@ function calculateStatistics(result) {
     const stats = {
         mergedPRs: 0,
         evictedPRs: result.Evictions.length,
+        fairlyEvictedPRs: 0,
+        unfairlyEvictedPRs: 0,
         queuedBuilds: 0,
         canceledBuilds: 0,
         waitingTimes: [],
         evictionTimes: []
     };
+
+    // Count fairly vs unfairly evicted PRs
+    for (const eviction of result.Evictions) {
+        if (eviction.reason === "Fast build failed") {
+            // Fast build failure: we know this PR caused the failure
+            stats.fairlyEvictedPRs++;
+        } else if (eviction.reason === "Full build failed") {
+            // Full build failure: we don't know which PR in the batch caused it
+            stats.unfairlyEvictedPRs++;
+        }
+    }
 
     // Count merged PRs and collect waiting times
     for (const batch of result.batches) {
