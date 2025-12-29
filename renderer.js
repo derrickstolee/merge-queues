@@ -98,7 +98,8 @@ function renderToCanvas(canvas, batches, layout) {
 		ctx.fillText(label, X_OFFSET - 10, rowY + 4);
 
 		// Draw PR events
-		for (const entry of batch.prEntries) {
+		const prEntries = batch.prEntries || [];
+		for (const entry of prEntries) {
 			const x = X_OFFSET + entry.queueTime * TIME_SCALE;
 
 			if (entry.isRequeued) {

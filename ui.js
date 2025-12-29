@@ -79,6 +79,12 @@ function simulateQueue() {
 
 		let result = simulateSimpleStrategy(pullRequests, maxBatchSize);
 
+		// Debug: Log batch details to console
+		console.log('Simulation complete. Batches:', result.batches.length);
+		result.batches.forEach((batch, i) => {
+			console.log(`Batch ${i}: status=${batch.status}, PRs=${batch.prs.length}, prEntries=${batch.prEntries.length}`);
+		});
+
 		// Populate the output data textarea with JSON
 		document.getElementById('outputData').value = JSON.stringify(result, null, 2);
 
