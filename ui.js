@@ -54,7 +54,81 @@ function simulateAndRender() {
 		const canvas = document.getElementById('queueCanvas');
 		// Pass all batches (including failed and canceled) to renderer
 		renderQueue(canvas, result.batches);
+
+		// Render statistics
+		if (result.statistics) {
+			renderStatistics(result.statistics);
+		}
 	}
+}
+
+/**
+ * Renders statistics in a table
+ * @param {Object} stats - Statistics object from simulation
+ */
+function renderStatistics(stats) {
+	const container = document.getElementById('statisticsContainer');
+
+	// Format time in seconds to a readable format
+	function formatTime(seconds) {
+		if (seconds < 60) {
+			return `${Math.round(seconds)}s`;
+		} else if (seconds < 3600) {
+			const mins = Math.floor(seconds / 60);
+			const secs = Math.round(seconds % 60);
+			return `${mins}m ${secs}s`;
+		} else {
+			const hours = Math.floor(seconds / 3600);
+			const mins = Math.floor((seconds % 3600) / 60);
+			return `${hours}h ${mins}m`;
+		}
+	}
+
+	const html = `
+		<table style="border-collapse: collapse; width: 100%; max-width: 800px;">
+			<thead>
+				<tr style="background-color: #f0f0f0;">
+					<th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Metric</th>
+					<th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Value</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td style="border: 1px solid #ddd; padding: 8px;">Merged Pull Requests</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: bold; color: green;">${stats.mergedPRs}</td>
+				</tr>
+				<tr style="background-color: #f9f9f9;">
+					<td style="border: 1px solid #ddd; padding: 8px;">Evicted Pull Requests</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: bold; color: red;">${stats.evictedPRs}</td>
+				</tr>
+				<tr>
+					<td style="border: 1px solid #ddd; padding: 8px;">Queued Builds</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${stats.queuedBuilds}</td>
+				</tr>
+				<tr style="background-color: #f9f9f9;">
+					<td style="border: 1px solid #ddd; padding: 8px;">Canceled Builds</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${stats.canceledBuilds}</td>
+				</tr>
+				<tr style="background-color: #e8f4f8;">
+					<td colspan="2" style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Waiting Time Statistics</td>
+				</tr>
+				<tr>
+					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">Median</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatTime(stats.waitingTimeMedian)}</td>
+				</tr>
+				<tr style="background-color: #f9f9f9;">
+					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">80th Percentile</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatTime(stats.waitingTimeP80)}</td>
+				</tr>
+				<tr>
+					<td style="border: 1px solid #ddd; padding: 8px; padding-left: 24px;">Maximum</td>
+					<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatTime(stats.waitingTimeMax)}</td>
+				</tr>
+			</tbody>
+		</table>
+	`;
+
+	container.innerHTML = html;
 }
 
 /**

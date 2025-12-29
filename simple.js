@@ -472,7 +472,65 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
         result.batches.push(batch);
     }
 
+    // Calculate statistics
+    result.statistics = calculateStatistics(result);
+
     return result;
+}
+
+function calculateStatistics(result) {
+    const stats = {
+        mergedPRs: 0,
+        evictedPRs: result.Evictions.length,
+        queuedBuilds: 0,
+        canceledBuilds: 0,
+        waitingTimes: []
+    };
+
+    // Count merged PRs and collect waiting times
+    for (const batch of result.batches) {
+        if (batch.status === 'success') {
+            stats.mergedPRs += batch.prs.length;
+
+            // Calculate waiting time for each PR in this batch
+            for (const pr of batch.prs) {
+                const waitingTime = batch.completedTime - pr.queuetime;
+                stats.waitingTimes.push(waitingTime);
+            }
+        }
+    }
+
+    // Count builds
+    // Every PR that enters a batch gets a fast build
+    for (const batch of result.batches) {
+        if (batch.status !== 'incomplete') {
+            stats.queuedBuilds += batch.prs.length; // Fast builds
+            stats.queuedBuilds += 1; // Full build for the batch
+        }
+    }
+
+    // Count canceled builds
+    stats.canceledBuilds = result.Builds.filter(b => b.status === 'canceled').length;
+
+    // Calculate waiting time statistics
+    if (stats.waitingTimes.length > 0) {
+        stats.waitingTimes.sort((a, b) => a - b);
+
+        const median = stats.waitingTimes[Math.floor(stats.waitingTimes.length / 2)];
+        const p80Index = Math.floor(stats.waitingTimes.length * 0.8);
+        const p80 = stats.waitingTimes[p80Index];
+        const max = stats.waitingTimes[stats.waitingTimes.length - 1];
+
+        stats.waitingTimeMedian = median;
+        stats.waitingTimeP80 = p80;
+        stats.waitingTimeMax = max;
+    } else {
+        stats.waitingTimeMedian = 0;
+        stats.waitingTimeP80 = 0;
+        stats.waitingTimeMax = 0;
+    }
+
+    return stats;
 }
 
 export { simulateSimpleStrategy };
