@@ -59,6 +59,13 @@ function simulateAndRender() {
 		if (result.statistics) {
 			renderStatistics(result.statistics);
 		}
+
+		// Reset scroll position to top-left
+		const canvasContainer = document.getElementById('canvasContainer');
+		if (canvasContainer) {
+			canvasContainer.scrollTop = 0;
+			canvasContainer.scrollLeft = 0;
+		}
 	}
 }
 
