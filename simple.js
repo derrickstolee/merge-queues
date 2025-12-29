@@ -150,7 +150,8 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
 
     // Result tracking
     const result = {
-        pullRequests: [], // For rendering - will contain batches
+        batches: [], // All batches (successful, failed, canceled)
+        pullRequests: [], // For backwards compatibility - successful batches only
         Commits: [],
         Builds: [],
         Evictions: []
@@ -177,7 +178,9 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
         const batch = {
             id: batchId,
             prs: [...state.currentBatch.prs],
-            startTime: currentTime
+            pullRequests: [...state.currentBatch.prs], // For renderer compatibility
+            startTime: currentTime,
+            status: 'building' // Will be updated to 'success', 'failed', or 'canceled'
         };
 
         // Calculate full build parameters
@@ -194,9 +197,11 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
 
         batch.fullBuildTime = maxFullBuildTime;
         batch.fullBuildPasses = allPass;
+        batch.FullBuildPasses = allPass; // For renderer compatibility
 
-        // Add to active batches
+        // Add to active batches and results
         state.activeBatches.push(batch);
+        result.batches.push(batch);
 
         // Schedule full build completion
         const fullBuildEndTime = currentTime + maxFullBuildTime;
@@ -242,9 +247,14 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
             });
         }
 
-        // Remove affected batches from active batches
+        // Mark affected batches as canceled and remove from active batches
         state.activeBatches = state.activeBatches.filter(batch => {
-            return !batch.prs.some(pr => prIds.has(pr.id));
+            if (batch.prs.some(pr => prIds.has(pr.id))) {
+                batch.status = 'canceled';
+                batch.canceledTime = currentTime;
+                return false;
+            }
+            return true;
         });
 
         // Clear current batch if it contains affected PRs
@@ -321,7 +331,11 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
             }
 
             if (!event.passed) {
-                // Fast build failed
+                // Fast build failed - mark PR as evicted
+                pr.evicted = true;
+                pr.evictedTime = currentTime;
+                pr.evictedReason = "Fast build failed";
+
                 result.Evictions.push({
                     prId: pr.id,
                     time: currentTime,
@@ -337,7 +351,10 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
                     state.currentBatch.prs = state.currentBatch.prs.filter(p => p.id !== pr.id);
                     delete state.currentBatch.fastBuildStatus[pr.id];
                 } else if (activeBatch) {
-                    // Case 2: Failed after batch closed - reset queue
+                    // Case 2: Failed after batch closed - mark batch as failed and reset queue
+                    activeBatch.status = 'failed';
+                    activeBatch.failedTime = currentTime;
+
                     const prsToRebatch = [];
 
                     // Collect all PRs from this batch (except the failed one)
@@ -372,16 +389,24 @@ function simulateSimpleStrategy(pullRequests, maxBatchSize)
 
             if (event.passed) {
                 // Success - branch update
-                result.pullRequests.push({
-                    pullRequests: batch.prs,
-                    FullBuildPasses: true
-                });
+                batch.status = 'success';
+                batch.completedTime = currentTime;
+
+                // Add to pullRequests for backwards compatibility with renderer
+                result.pullRequests.push(batch);
 
                 // Remove from active batches
                 state.activeBatches = state.activeBatches.filter(b => b.id !== event.batchId);
             } else {
-                // Failure - evict batch and reset queue
+                // Failure - mark batch and evict all PRs
+                batch.status = 'failed';
+                batch.failedTime = currentTime;
+
                 for (const pr of batch.prs) {
+                    pr.evicted = true;
+                    pr.evictedTime = currentTime;
+                    pr.evictedReason = "Full build failed";
+
                     result.Evictions.push({
                         prId: pr.id,
                         time: currentTime,
