@@ -53,12 +53,12 @@ function renderToCanvas(canvas, batches, layout) {
 	const { maxTime, numRows } = layout;
 
 	// Constants for rendering
-	const ROW_HEIGHT = 40;
-	const PR_RADIUS = 6;
-	const DIAMOND_SIZE = 8;
-	const SQUARE_SIZE = 10;
+	const ROW_HEIGHT = 25;
+	const PR_RADIUS = 5;
+	const DIAMOND_SIZE = 6;
+	const SQUARE_SIZE = 8;
 	const X_OFFSET = 80;
-	const Y_OFFSET = 30;
+	const Y_OFFSET = 20;
 	const MAX_CANVAS_WIDTH = 5000;
 
 	// Calculate scaling
@@ -92,10 +92,10 @@ function renderToCanvas(canvas, batches, layout) {
 
 		// Draw batch label
 		ctx.fillStyle = 'black';
-		ctx.font = '12px monospace';
+		ctx.font = '11px monospace';
 		ctx.textAlign = 'right';
 		const label = batch.status === 'incomplete' ? `Batch ${batchIndex}*` : `Batch ${batchIndex}`;
-		ctx.fillText(label, X_OFFSET - 10, rowY + 4);
+		ctx.fillText(label, X_OFFSET - 10, rowY + 3);
 
 		// Draw PR events
 		const prEntries = batch.prEntries || [];
@@ -201,8 +201,8 @@ function renderToCanvas(canvas, batches, layout) {
 
 	// Draw legend
 	const legendX = canvas.width - 200;
-	const legendY = 20;
-	ctx.font = '11px sans-serif';
+	const legendY = 15;
+	ctx.font = '10px sans-serif';
 	ctx.textAlign = 'left';
 
 	let legendYOffset = legendY;
@@ -212,8 +212,8 @@ function renderToCanvas(canvas, batches, layout) {
 	ctx.beginPath();
 	ctx.arc(legendX, legendYOffset, PR_RADIUS, 0, 2 * Math.PI);
 	ctx.fill();
-	ctx.fillText('PR (merged)', legendX + 15, legendYOffset + 4);
-	legendYOffset += 20;
+	ctx.fillText('PR (merged)', legendX + 15, legendYOffset + 3);
+	legendYOffset += 16;
 
 	// PR in failed/canceled batch
 	ctx.strokeStyle = 'gray';
@@ -222,8 +222,8 @@ function renderToCanvas(canvas, batches, layout) {
 	ctx.arc(legendX, legendYOffset, PR_RADIUS, 0, 2 * Math.PI);
 	ctx.stroke();
 	ctx.fillStyle = 'black';
-	ctx.fillText('PR (failed/canceled)', legendX + 15, legendYOffset + 4);
-	legendYOffset += 20;
+	ctx.fillText('PR (failed/canceled)', legendX + 15, legendYOffset + 3);
+	legendYOffset += 16;
 
 	// Evicted PR
 	ctx.strokeStyle = 'gray';
@@ -235,8 +235,8 @@ function renderToCanvas(canvas, batches, layout) {
 	ctx.moveTo(legendX + xSize, legendYOffset - xSize);
 	ctx.lineTo(legendX - xSize, legendYOffset + xSize);
 	ctx.stroke();
-	ctx.fillText('PR evicted', legendX + 15, legendYOffset + 4);
-	legendYOffset += 20;
+	ctx.fillText('PR evicted', legendX + 15, legendYOffset + 3);
+	legendYOffset += 16;
 
 	// Batch created
 	ctx.fillStyle = 'blue';
@@ -248,15 +248,15 @@ function renderToCanvas(canvas, batches, layout) {
 	ctx.closePath();
 	ctx.fill();
 	ctx.fillStyle = 'black';
-	ctx.fillText('Batch created', legendX + 15, legendYOffset + 4);
-	legendYOffset += 20;
+	ctx.fillText('Batch created', legendX + 15, legendYOffset + 3);
+	legendYOffset += 16;
 
 	// Success
 	ctx.fillStyle = 'green';
 	ctx.fillRect(legendX - SQUARE_SIZE / 2, legendYOffset - SQUARE_SIZE / 2, SQUARE_SIZE, SQUARE_SIZE);
 	ctx.fillStyle = 'black';
-	ctx.fillText('Merged', legendX + 15, legendYOffset + 4);
-	legendYOffset += 20;
+	ctx.fillText('Merged', legendX + 15, legendYOffset + 3);
+	legendYOffset += 16;
 
 	// Failed
 	ctx.strokeStyle = 'red';
@@ -268,8 +268,8 @@ function renderToCanvas(canvas, batches, layout) {
 	ctx.lineTo(legendX - SQUARE_SIZE, legendYOffset + SQUARE_SIZE);
 	ctx.stroke();
 	ctx.fillStyle = 'black';
-	ctx.fillText('Failed', legendX + 15, legendYOffset + 4);
-	legendYOffset += 20;
+	ctx.fillText('Failed', legendX + 15, legendYOffset + 3);
+	legendYOffset += 16;
 
 	// Canceled
 	ctx.strokeStyle = 'gray';
@@ -281,13 +281,13 @@ function renderToCanvas(canvas, batches, layout) {
 	ctx.lineTo(legendX - SQUARE_SIZE, legendYOffset + SQUARE_SIZE);
 	ctx.stroke();
 	ctx.fillStyle = 'black';
-	ctx.fillText('Canceled', legendX + 15, legendYOffset + 4);
-	legendYOffset += 20;
+	ctx.fillText('Canceled', legendX + 15, legendYOffset + 3);
+	legendYOffset += 16;
 
 	// Incomplete batch note
 	ctx.fillStyle = 'black';
-	ctx.font = '10px sans-serif';
-	ctx.fillText('* = Incomplete batch', legendX - 5, legendYOffset + 4);
+	ctx.font = '9px sans-serif';
+	ctx.fillText('* = Incomplete batch', legendX - 5, legendYOffset + 3);
 }
 
 /**
