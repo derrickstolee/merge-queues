@@ -81,78 +81,326 @@
 
 function simulateSimpleStrategy(pullRequests, maxBatchSize)
 {
-    // Priority queue to manage PRs by queue time
+    // Add IDs to pull requests
+    for (let i = 0; i < pullRequests.length; i++) {
+        pullRequests[i].id = i;
+    }
+
+    // Priority queue with removal capability
+    let nextEventId = 0;
     const eventQueue = {
         items: [],
 
-        // Add item with key
-        insert: function(key, value) {
-            this.items.push({ key: key, value: value });
+        insert: function(time, event) {
+            event.eventId = nextEventId++;
+            this.items.push({ key: time, value: event });
             this.items.sort((a, b) => a.key - b.key);
         },
 
-        // Remove and return item with lowest key
         removeMin: function() {
-            if (this.items.length === 0) {
-                return null;
-            }
+            if (this.items.length === 0) return null;
             return this.items.shift().value;
         },
 
-        // Check if empty
+        removeMatching: function(predicate) {
+            const removed = [];
+            this.items = this.items.filter(item => {
+                if (predicate(item.value)) {
+                    removed.push(item.value);
+                    return false;
+                }
+                return true;
+            });
+            return removed;
+        },
+
         isEmpty: function() {
             return this.items.length === 0;
         },
 
-        // Get size
         size: function() {
             return this.items.length;
         }
     };
 
-    // Initialize priority queue with pull requests using queuetime as key
+    // Initialize with PR commit events
     for (const pr of pullRequests) {
-	var event = {
-		time: pr.queuetime,
-		type: "PR commit",
-		obj: pr
-	};
-        eventQueue.insert(pr.queuetime, event);
+        eventQueue.insert(pr.queuetime, {
+            time: pr.queuetime,
+            type: "PR commit",
+            prId: pr.id
+        });
     }
 
-    // Create result object
+    // Simulation state
+    let nextBatchId = 0;
+    const state = {
+        currentBatch: {
+            prs: [],
+            fastBuildStatus: {} // prId -> {completed, passed}
+        },
+        activeBatches: [], // Batches with full builds running
+        prMap: {} // id -> pr object
+    };
+
+    // Initialize PR map
+    for (const pr of pullRequests) {
+        state.prMap[pr.id] = pr;
+    }
+
+    // Result tracking
     const result = {
+        pullRequests: [], // For rendering - will contain batches
         Commits: [],
         Builds: [],
         Evictions: []
     };
 
-    // Simulate the on-line nature of the queue: only looking at events
-    // in time-based order.
-    while (eventQueue.size() > 0) {
-	var event = eventQueue.removeMin();
+    // Helper: Check if current batch is ready to close
+    function isCurrentBatchReady() {
+        if (state.currentBatch.prs.length === 0) return false;
 
-	if (event.type == "PR commit")
-	{
-		// Perform queueing logic. Create build completion event.
+        for (const pr of state.currentBatch.prs) {
+            const status = state.currentBatch.fastBuildStatus[pr.id];
+            if (!status || !status.completed || !status.passed) {
+                return false;
+            }
+        }
+        return true;
+    }
 
-		var buildEndEvent = {
-			time: event.obj.queuetime + event.obj.FastBuildTime,
-			type: "Build completion",
-			obj: {
-				startTime: event.obj.queuetime,
-				duration: event.obj.FastBuildTime,
-				type: "fast",
-				passed: event.obj.FastBuildPasses,
-			}
-		};
+    // Helper: Close current batch
+    function closeCurrentBatch(currentTime) {
+        if (state.currentBatch.prs.length === 0) return;
 
-		eventQueue.insert(buildEndEvent.time, buildEndEvent);
-	}
-	else if (event.type == "Build completion")
-	{
+        const batchId = nextBatchId++;
+        const batch = {
+            id: batchId,
+            prs: [...state.currentBatch.prs],
+            startTime: currentTime
+        };
 
-	}
+        // Calculate full build parameters
+        let maxFullBuildTime = 0;
+        let allPass = true;
+        for (const pr of batch.prs) {
+            if (pr.FullBuildTime > maxFullBuildTime) {
+                maxFullBuildTime = pr.FullBuildTime;
+            }
+            if (!pr.FullBuildPasses) {
+                allPass = false;
+            }
+        }
+
+        batch.fullBuildTime = maxFullBuildTime;
+        batch.fullBuildPasses = allPass;
+
+        // Add to active batches
+        state.activeBatches.push(batch);
+
+        // Schedule full build completion
+        const fullBuildEndTime = currentTime + maxFullBuildTime;
+        eventQueue.insert(fullBuildEndTime, {
+            time: fullBuildEndTime,
+            type: "Full build completion",
+            batchId: batchId,
+            passed: allPass
+        });
+
+        // Reset current batch
+        state.currentBatch = {
+            prs: [],
+            fastBuildStatus: {}
+        };
+    }
+
+    // Helper: Reset queue from a list of PRs
+    function resetQueue(prsToRebatch, currentTime) {
+        // Cancel all builds for these PRs
+        const prIds = new Set(prsToRebatch.map(pr => pr.id));
+
+        // Remove fast build events
+        const removed = eventQueue.removeMatching(event => {
+            if (event.type === "Fast build completion" && prIds.has(event.prId)) {
+                return true;
+            }
+            if (event.type === "Full build completion") {
+                const batch = state.activeBatches.find(b => b.id === event.batchId);
+                if (batch && batch.prs.some(pr => prIds.has(pr.id))) {
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        // Log canceled builds
+        for (const event of removed) {
+            result.Builds.push({
+                type: event.type === "Fast build completion" ? "fast" : "full",
+                status: "canceled",
+                time: currentTime
+            });
+        }
+
+        // Remove affected batches from active batches
+        state.activeBatches = state.activeBatches.filter(batch => {
+            return !batch.prs.some(pr => prIds.has(pr.id));
+        });
+
+        // Clear current batch if it contains affected PRs
+        if (state.currentBatch.prs.some(pr => prIds.has(pr.id))) {
+            state.currentBatch = {
+                prs: [],
+                fastBuildStatus: {}
+            };
+        }
+
+        // Re-batch PRs
+        for (const pr of prsToRebatch) {
+            // Add to current batch
+            state.currentBatch.prs.push(pr);
+            state.currentBatch.fastBuildStatus[pr.id] = {
+                completed: false,
+                passed: false
+            };
+
+            // Start fast build
+            const fastBuildEndTime = currentTime + pr.FastBuildTime;
+            eventQueue.insert(fastBuildEndTime, {
+                time: fastBuildEndTime,
+                type: "Fast build completion",
+                prId: pr.id,
+                passed: pr.FastBuildPasses
+            });
+
+            // Check if batch is full
+            if (state.currentBatch.prs.length >= maxBatchSize) {
+                closeCurrentBatch(currentTime);
+            }
+        }
+    }
+
+    // Main event loop
+    while (!eventQueue.isEmpty()) {
+        const event = eventQueue.removeMin();
+        const currentTime = event.time;
+
+        if (event.type === "PR commit") {
+            const pr = state.prMap[event.prId];
+
+            // Add to current batch
+            state.currentBatch.prs.push(pr);
+            state.currentBatch.fastBuildStatus[pr.id] = {
+                completed: false,
+                passed: false
+            };
+
+            // Start fast build
+            const fastBuildEndTime = currentTime + pr.FastBuildTime;
+            eventQueue.insert(fastBuildEndTime, {
+                time: fastBuildEndTime,
+                type: "Fast build completion",
+                prId: pr.id,
+                passed: pr.FastBuildPasses
+            });
+
+            // Check if batch is full
+            if (state.currentBatch.prs.length >= maxBatchSize) {
+                closeCurrentBatch(currentTime);
+            }
+        }
+        else if (event.type === "Fast build completion") {
+            const pr = state.prMap[event.prId];
+
+            // Update status
+            if (state.currentBatch.fastBuildStatus[pr.id]) {
+                state.currentBatch.fastBuildStatus[pr.id] = {
+                    completed: true,
+                    passed: event.passed
+                };
+            }
+
+            if (!event.passed) {
+                // Fast build failed
+                result.Evictions.push({
+                    prId: pr.id,
+                    time: currentTime,
+                    reason: "Fast build failed"
+                });
+
+                // Find if PR is in current batch or an active batch
+                const isInCurrentBatch = state.currentBatch.prs.some(p => p.id === pr.id);
+                const activeBatch = state.activeBatches.find(b => b.prs.some(p => p.id === pr.id));
+
+                if (isInCurrentBatch && !activeBatch) {
+                    // Case 1: Failed before batch closed - just remove it
+                    state.currentBatch.prs = state.currentBatch.prs.filter(p => p.id !== pr.id);
+                    delete state.currentBatch.fastBuildStatus[pr.id];
+                } else if (activeBatch) {
+                    // Case 2: Failed after batch closed - reset queue
+                    const prsToRebatch = [];
+
+                    // Collect all PRs from this batch (except the failed one)
+                    for (const p of activeBatch.prs) {
+                        if (p.id !== pr.id) {
+                            prsToRebatch.push(p);
+                        }
+                    }
+
+                    // Collect PRs from later batches
+                    for (const batch of state.activeBatches) {
+                        if (batch.id > activeBatch.id) {
+                            prsToRebatch.push(...batch.prs);
+                        }
+                    }
+
+                    // Collect PRs from current batch
+                    prsToRebatch.push(...state.currentBatch.prs);
+
+                    resetQueue(prsToRebatch, currentTime);
+                }
+            } else {
+                // Fast build passed - check if batch is ready
+                if (isCurrentBatchReady()) {
+                    closeCurrentBatch(currentTime);
+                }
+            }
+        }
+        else if (event.type === "Full build completion") {
+            const batch = state.activeBatches.find(b => b.id === event.batchId);
+            if (!batch) continue; // Already canceled
+
+            if (event.passed) {
+                // Success - branch update
+                result.pullRequests.push({
+                    pullRequests: batch.prs,
+                    FullBuildPasses: true
+                });
+
+                // Remove from active batches
+                state.activeBatches = state.activeBatches.filter(b => b.id !== event.batchId);
+            } else {
+                // Failure - evict batch and reset queue
+                for (const pr of batch.prs) {
+                    result.Evictions.push({
+                        prId: pr.id,
+                        time: currentTime,
+                        reason: "Full build failed"
+                    });
+                }
+
+                // Collect PRs to rebatch (everything after this batch)
+                const prsToRebatch = [];
+                for (const b of state.activeBatches) {
+                    if (b.id > event.batchId) {
+                        prsToRebatch.push(...b.prs);
+                    }
+                }
+                prsToRebatch.push(...state.currentBatch.prs);
+
+                resetQueue(prsToRebatch, currentTime);
+            }
+        }
     }
 
     return result;
